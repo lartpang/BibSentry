@@ -107,7 +107,8 @@ Implemented settings:
 - Enable or disable individual search sources.
 - Save source choices in browser state.
 - Configure a Semantic Scholar API key.
-- Persist the API key in `localStorage`.
+- Keep the API key in page memory by default.
+- Persist the API key in `localStorage` only when `Remember on this browser` is checked.
 - Show a clear 401/403 authentication error, highlight the input, and reopen the settings panel when the key is rejected.
 
 Planned settings:
@@ -138,7 +139,7 @@ Your full `.bib` file is not uploaded to a project server. Parsing and editing h
 
 Network requests are made directly to enabled public sources. Depending on source and entry, these requests can include paper titles and, once implemented, identifiers such as DOI or arXiv ID.
 
-Semantic Scholar API keys are stored in `localStorage` and are sent only to the Semantic Scholar API.
+Semantic Scholar API keys stay in page memory by default. If `Remember on this browser` is checked, the key is stored in `localStorage`. In both modes, the key is sent only to the Semantic Scholar API.
 
 ## Local Development
 

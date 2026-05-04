@@ -42,8 +42,9 @@
       copy: "Copy", copied: "Copied!",
       toc_title: "Contents",
       api_keys_title: "API Keys",
-      api_keys_help: "Optional. Keys unlock higher rate limits. Values are saved in localStorage and never sent elsewhere.",
+      api_keys_help: "Optional. Keys unlock higher rate limits. Keys stay in this page session unless you choose to remember them.",
       api_key_placeholder: "Paste API key here…",
+      remember_api_key: "Remember on this browser",
       api_key_auth_error: "API key rejected — clear the field if you don't have one.",
       api_key_auth_error_401: "API key invalid (401 Unauthorized). Please check or clear the key.",
       api_key_auth_error_403: "API key forbidden (403 Forbidden). Please check or clear the key.",
@@ -85,8 +86,9 @@
       copy: "复制", copied: "已复制！",
       toc_title: "目录",
       api_keys_title: "API Keys",
-      api_keys_help: "可选。配置后可提升请求频率上限。Key 仅保存在 localStorage，不会上传至其他服务器。",
+      api_keys_help: "可选。配置后可提升请求频率上限。默认仅在当前页面会话保存，勾选记住后才写入本浏览器。",
       api_key_placeholder: "粘贴 API Key…",
+      remember_api_key: "在本浏览器记住",
       api_key_auth_error: "API Key 验证失败——如果没有 Key 请清空该输入框。",
       api_key_auth_error_401: "API Key 无效（401 Unauthorized），请检查或清空 Key。",
       api_key_auth_error_403: "API Key 被拒绝（403 Forbidden），请检查或清空 Key。",
@@ -292,6 +294,7 @@
     { id: "semantic_scholar", label: "Semantic Scholar", storageKey: "bv-apikey-ss",
       link: "https://www.semanticscholar.org/product/api" },
   ];
+  const sessionApiKeys = {};
 
   function renderApiKeyOptions() {
     const container = document.getElementById("api-keys-options");
@@ -299,12 +302,14 @@
     container.innerHTML = "";
     for (const src of API_KEY_SOURCES) {
       const saved = localStorage.getItem(src.storageKey) || "";
+      const current = Object.prototype.hasOwnProperty.call(sessionApiKeys, src.id) ? sessionApiKeys[src.id] : saved;
       const row = document.createElement("div");
       row.className = "api-key-row";
       row.id = "api-key-row-" + src.id;
       row.innerHTML =
         '<label class="api-key-label"><a class="api-key-source-link" href="' + escAttr(src.link) + '" target="_blank" rel="noopener">' + esc(src.label) + '</a></label>' +
-        '<input class="api-key-input" type="password" data-source="' + escAttr(src.id) + '" placeholder="' + esc(t("api_key_placeholder")) + '" value="' + escAttr(saved) + '" autocomplete="off" spellcheck="false" />';
+        '<input class="api-key-input" type="password" data-source="' + escAttr(src.id) + '" placeholder="' + esc(t("api_key_placeholder")) + '" value="' + escAttr(current) + '" autocomplete="off" spellcheck="false" />' +
+        '<label class="option-toggle api-key-remember"><input type="checkbox" class="api-key-remember-input" data-source="' + escAttr(src.id) + '"' + (saved ? " checked" : "") + ' /><span>' + esc(t("remember_api_key")) + '</span></label>';
       container.appendChild(row);
     }
     container.querySelectorAll(".api-key-input").forEach(input => {
@@ -314,7 +319,20 @@
         // clear any previous auth error when user edits the key
         clearApiKeyError(src.id);
         const val = input.value.trim();
-        if (val) localStorage.setItem(src.storageKey, val);
+        sessionApiKeys[src.id] = val;
+        const remember = container.querySelector('.api-key-remember-input[data-source="' + src.id + '"]')?.checked;
+        if (remember && val) localStorage.setItem(src.storageKey, val);
+        else localStorage.removeItem(src.storageKey);
+      });
+    });
+    container.querySelectorAll(".api-key-remember-input").forEach(remember => {
+      remember.addEventListener("change", () => {
+        const src = API_KEY_SOURCES.find(s => s.id === remember.dataset.source);
+        if (!src) return;
+        const input = container.querySelector('.api-key-input[data-source="' + src.id + '"]');
+        const val = (input?.value || "").trim();
+        sessionApiKeys[src.id] = val;
+        if (remember.checked && val) localStorage.setItem(src.storageKey, val);
         else localStorage.removeItem(src.storageKey);
       });
     });
@@ -348,7 +366,9 @@
 
   function getApiKey(sourceId) {
     const src = API_KEY_SOURCES.find(s => s.id === sourceId);
-    return src ? (localStorage.getItem(src.storageKey) || "") : "";
+    if (!src) return "";
+    if (Object.prototype.hasOwnProperty.call(sessionApiKeys, sourceId)) return sessionApiKeys[sourceId] || "";
+    return localStorage.getItem(src.storageKey) || "";
   }
 
   renderApiKeyOptions();

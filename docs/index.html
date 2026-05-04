@@ -62,8 +62,8 @@
       <p class="hero-lead">Upload a <code>.bib</code> file or paste directly from Overleaf.
         BibTeX Verifier checks every entry against selected academic sources to find
         wrong authors, incorrect years, mismatched venues, missing DOIs, duplicates,
-        and <strong>AI-hallucinated citations</strong> that don't exist in any database.
-        100% in-browser ??your data never leaves your machine.</p>
+        and <strong>AI-hallucinated citations</strong> that don't exist in any selected source.
+        Parsing and review stay in your browser; online verification sends lookup queries only to the sources you enable.</p>
     </header>
 
     <div class="input-tabs">
@@ -190,7 +190,7 @@
       </details>
       <details>
         <summary>Is my data safe?</summary>
-        <p>Yes. Your <code>.bib</code> file is parsed entirely in your browser. Online verification sends titles or identifiers only to the selected public services: Semantic Scholar and CrossRef.</p>
+        <p>Your <code>.bib</code> file is parsed entirely in your browser. Online verification sends lookup queries only to enabled public sources such as DBLP, CrossRef, Semantic Scholar, CVF, OpenReview, and arXiv. Optional Semantic Scholar API keys are sent only to Semantic Scholar.</p>
       </details>
       <details>
         <summary>Why are some entries "Not Found"?</summary>
@@ -233,7 +233,7 @@
               <div class="settings-divider"></div>
               <div class="settings-section-title" id="api-keys-title">API Keys</div>
               <div id="api-keys-options"></div>
-              <div class="setting-help" id="api-keys-help">Optional. Keys unlock higher rate limits. Values are saved in localStorage and never sent to any server other than the respective API.</div>
+              <div class="setting-help" id="api-keys-help">Optional. Keys unlock higher rate limits. Keys stay in this page session unless you choose to remember them.</div>
             </div>
           </div>
 
