@@ -1,4 +1,4 @@
-const assert = require("assert");
+﻿const assert = require("assert");
 const lib = require("../docs/lib.js");
 
 let passed = 0;
@@ -489,35 +489,18 @@ test("returns null for empty candidates", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
-console.log("\n── abbreviateVenue ──");
+console.log("\n── verifyEntryLayered ──");
 
-test("abbreviates known venues", () => {
-  assert.strictEqual(lib.abbreviateVenue("Advances in Neural Information Processing Systems"), "NeurIPS");
-  assert.strictEqual(lib.abbreviateVenue("International Conference on Machine Learning"), "ICML");
-  assert.strictEqual(lib.abbreviateVenue("IEEE Conference on Computer Vision and Pattern Recognition"), "CVPR");
+test("layered verification compares venue names directly", () => {
+  const entry = { ENTRYTYPE: "inproceedings", title: "Attention Is All You Need", author: "Vaswani, Ashish", year: "2017", booktitle: "NeurIPS" };
+  const candidate = { title: "Attention Is All You Need", author: "Ashish Vaswani", year: "2017", journal: "Advances in Neural Information Processing Systems", _source: "semantic_scholar" };
+  const result = lib.verifyEntryLayered(entry, [candidate]);
+  assert.strictEqual(result.layers.existence, "found");
+  assert.strictEqual(result.layers.identity, "same_work");
+  assert.strictEqual(result.evidence[0].venueMatch, false);
+  assert.strictEqual(result.evidence[0].entryVenue, "neurips");
+  assert.strictEqual(result.evidence[0].candidateVenue, "advances in neural information processing systems");
 });
-
-test("returns original for unknown venues", () => {
-  assert.strictEqual(lib.abbreviateVenue("Some Unknown Workshop"), "Some Unknown Workshop");
-});
-
-test("handles null/empty gracefully", () => {
-  assert.strictEqual(lib.abbreviateVenue(""), "");
-  assert.strictEqual(lib.abbreviateVenue(null), null);
-});
-
-// ═══════════════════════════════════════════════════════════════════════
-console.log("\n── expandVenue ──");
-
-test("expands known abbreviations", () => {
-  const result = lib.expandVenue("NeurIPS");
-  assert.ok(result.toLowerCase().includes("neural information processing"), `Got: ${result}`);
-});
-
-test("returns original for unknown abbreviations", () => {
-  assert.strictEqual(lib.expandVenue("XYZCONF"), "XYZCONF");
-});
-
 // ═══════════════════════════════════════════════════════════════════════
 console.log("\n── Constants ──");
 
@@ -541,3 +524,5 @@ console.log(`Results: ${passed} passed, ${failed} failed`);
 console.log("══════════════════════════════════\n");
 
 process.exit(failed > 0 ? 1 : 0);
+
+
