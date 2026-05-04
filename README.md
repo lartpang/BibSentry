@@ -6,7 +6,7 @@ The app is published as a static GitHub Pages site from `docs/`. There is no bac
 
 [Live app](https://lartpang.github.io/Bibtex-Verifier/) | [MIT License](LICENSE)
 
-## Acknowledgement
+## Acknowledgement And Inspiration
 
 This project builds on the original [merfanian/Bibtex-Verifier](https://github.com/merfanian/Bibtex-Verifier). The original project provided the browser-based BibTeX verification foundation, including the static GitHub Pages app, BibTeX parsing workflow, CrossRef/Semantic Scholar checks, result cards, and export-oriented review flow.
 
