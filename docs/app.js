@@ -1,1365 +1,980 @@
 (() => {
   "use strict";
-
   const B = window.BibLib;
+  const BV = window.BibVerify;
 
-  // ─── Configuration ───────────────────────────────────────────────────
-  const CROSSREF_API = "https://api.crossref.org/works";
-  const SS_MATCH = "https://api.semanticscholar.org/graph/v1/paper/search/match";
-  const SS_SEARCH = "https://api.semanticscholar.org/graph/v1/paper/search";
-  const SS_FIELDS = "title,authors,year,venue,publicationVenue,externalIds";
-  const MAX_RETRIES = 4;
-  const RETRY_BASE_MS = 1500;
-
-  // ─── Adaptive rate controller ──────────────────────────────────────
-  const rateState = {
-    ssDelay: 500,
-    crDelay: 100,
-    ssMin: 300,   ssMax: 3000,
-    crMin: 50,    crMax: 2000,
-    lastSSTime: 0,
-    lastCRTime: 0,
-    ssConsecutiveOk: 0,
-    crConsecutiveOk: 0,
+  // ─── i18n ─────────────────────────────────────────────────────────────
+  const LANGS = {
+    en: {
+      upload_tab: "Upload file", paste_tab: "Paste BibTeX",
+      drop_label: "Drop your .bib file here or click to browse",
+      drop_sub: "Standard BibTeX & BibLaTeX · Processed entirely in your browser",
+      paste_btn: "Parse BibTeX",
+      paste_placeholder: "Paste your BibTeX content here, e.g. from Overleaf...\n\n@article{example2024,\n  title={Your Paper Title},\n  author={Author, First and Author, Second},\n  year={2024},\n  journal={Some Journal}\n}",
+      start_verification: "Start verification", pause: "Pause", resume: "Continue",
+      download: "Download Corrected .bib",
+      badge_parsed: "Parsed", badge_verified: "Verified", badge_updated: "Auto-Updated",
+      badge_review: "Needs Review", badge_notfound: "Not Found",
+      badge_duplicates: "Duplicates", badge_error: "Error",
+      status_parsed: "Parsed", status_verified: "Verified", status_updated: "Auto-Updated",
+      status_needs_review: "Needs Review", status_not_found: "Not Found",
+      status_error: "Error", status_duplicate: "Duplicate",
+      view_original: "Original", view_found: "Found", view_edit: "Edit", view_diff: "Diff",
+      adopt_found: "Adopt Found", close: "×",
+      candidates_title: "Search Results", candidates_more: "more", candidates_less: "less",
+      selected: "selected",
+      log_events: "events", log_clear: "Clear",
+      preparing: "Preparing...", verifying: "Verifying",
+      done: "Done", entries_parsed: "entries parsed", entries_verified: "entries verified",
+      no_title: "(no title)",
+      not_found_msg: "No matching publication found.", no_title_msg: "No title, cannot search.",
+      dup_of: "Duplicate of",
+      similarity: "similarity to",
+      fields_count: "Fields",
+      detail_compare: "Compare & Edit",
+      no_entries: "No BibTeX entries found.",
+      upload_bib_only: "Please upload a .bib file.",
+      paste_first: "Please paste your BibTeX content first.",
+      select_source: "Select at least one search source.",
+      settings_title: "Search Sources (Tiered)",
+      settings_help: "Layered search: Tier 1 (published records) → Tier 2 (conference proceedings) → Tier 3 (preprints). Published versions are preferred over preprints.",
+      tier1: "Tier 1 — Published Records", tier2: "Tier 2 — Conference Proceedings", tier3: "Tier 3 — Preprints",
+      copy: "Copy", copied: "Copied!",
+      toc_title: "Contents",
+      api_keys_title: "API Keys",
+      api_keys_help: "Optional. Keys unlock higher rate limits. Values are saved in localStorage and never sent elsewhere.",
+      api_key_placeholder: "Paste API key here…",
+      api_key_auth_error: "API key rejected — clear the field if you don't have one.",
+      api_key_auth_error_401: "API key invalid (401 Unauthorized). Please check or clear the key.",
+      api_key_auth_error_403: "API key forbidden (403 Forbidden). Please check or clear the key.",
+    },
+    zh: {
+      upload_tab: "上传文件", paste_tab: "粘贴 BibTeX",
+      drop_label: "将 .bib 文件拖放至此处，或点击浏览",
+      drop_sub: "支持标准 BibTeX 和 BibLaTeX · 完全在浏览器中处理",
+      paste_btn: "解析 BibTeX",
+      paste_placeholder: "在此粘贴 BibTeX 内容，例如来自 Overleaf...\n\n@article{example2024,\n  title={Your Paper Title},\n  author={Author, First and Author, Second},\n  year={2024},\n  journal={Some Journal}\n}",
+      start_verification: "开始验证", pause: "暂停", resume: "继续",
+      download: "下载修正后的 .bib",
+      badge_parsed: "已解析", badge_verified: "已验证", badge_updated: "自动更新",
+      badge_review: "待审核", badge_notfound: "未找到",
+      badge_duplicates: "重复", badge_error: "错误",
+      status_parsed: "已解析", status_verified: "已验证", status_updated: "自动更新",
+      status_needs_review: "待审核", status_not_found: "未找到",
+      status_error: "错误", status_duplicate: "重复",
+      view_original: "原始内容", view_found: "检索结果", view_edit: "编辑区", view_diff: "差异对比",
+      adopt_found: "采用检索结果", close: "×",
+      candidates_title: "检索结果", candidates_more: "更多", candidates_less: "收起",
+      selected: "当前",
+      log_events: "条记录", log_clear: "清空",
+      preparing: "准备中...", verifying: "正在验证",
+      done: "完成", entries_parsed: "条已解析", entries_verified: "条已验证",
+      no_title: "（无标题）",
+      not_found_msg: "未找到匹配的出版物。", no_title_msg: "无标题，无法搜索。",
+      dup_of: "与以下条目重复：",
+      similarity: "与以下文献相似度",
+      fields_count: "字段",
+      detail_compare: "对比 & 编辑",
+      no_entries: "未找到 BibTeX 条目。",
+      upload_bib_only: "请上传 .bib 文件。",
+      paste_first: "请先粘贴 BibTeX 内容。",
+      select_source: "请至少选择一个检索来源。",
+      settings_title: "检索来源（分层）",
+      settings_help: "分层检索：第一层（已出版记录）→ 第二层（会议论文集）→ 第三层（预印本）。优先选择已出版版本。",
+      tier1: "第一层 — 已出版记录", tier2: "第二层 — 会议论文集", tier3: "第三层 — 预印本",
+      copy: "复制", copied: "已复制！",
+      toc_title: "目录",
+      api_keys_title: "API Keys",
+      api_keys_help: "可选。配置后可提升请求频率上限。Key 仅保存在 localStorage，不会上传至其他服务器。",
+      api_key_placeholder: "粘贴 API Key…",
+      api_key_auth_error: "API Key 验证失败——如果没有 Key 请清空该输入框。",
+      api_key_auth_error_401: "API Key 无效（401 Unauthorized），请检查或清空 Key。",
+      api_key_auth_error_403: "API Key 被拒绝（403 Forbidden），请检查或清空 Key。",
+    }
   };
+  let lang = localStorage.getItem("bv-lang") || "en";
+  function t(k) { return (LANGS[lang] || LANGS.en)[k] || k; }
+  function setLang(l) { lang = l; localStorage.setItem("bv-lang", l); applyLang(); }
+  let _appReady = false;
 
-  function rateBackoff(source) {
-    if (source === "ss") {
-      rateState.ssDelay = Math.min(rateState.ssDelay * 1.3, rateState.ssMax);
-      rateState.ssConsecutiveOk = 0;
-    } else {
-      rateState.crDelay = Math.min(rateState.crDelay * 1.3, rateState.crMax);
-      rateState.crConsecutiveOk = 0;
-    }
-  }
-
-  function rateSuccess(source) {
-    if (source === "ss") {
-      rateState.ssConsecutiveOk++;
-      if (rateState.ssConsecutiveOk >= 2) {
-        rateState.ssDelay = Math.max(rateState.ssDelay * 0.85, rateState.ssMin);
-        rateState.ssConsecutiveOk = 0;
-      }
-    } else {
-      rateState.crConsecutiveOk++;
-      if (rateState.crConsecutiveOk >= 2) {
-        rateState.crDelay = Math.max(rateState.crDelay * 0.85, rateState.crMin);
-        rateState.crConsecutiveOk = 0;
-      }
-    }
-  }
-
-  // ─── Network ─────────────────────────────────────────────────────────
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  async function fetchJSON(url, params, { retries = MAX_RETRIES, is404Ok = false } = {}) {
-    const u = new URL(url);
-    for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-
-    const isSS = url.includes("semanticscholar.org");
-    const source = isSS ? "ss" : "cr";
-    const delay = isSS ? rateState.ssDelay : rateState.crDelay;
-    const lastKey = isSS ? "lastSSTime" : "lastCRTime";
-    const elapsed = Date.now() - rateState[lastKey];
-    if (elapsed < delay) await sleep(delay - elapsed);
-    rateState[lastKey] = Date.now();
-
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        const resp = await fetch(u.toString());
-        if (resp.ok) {
-          rateSuccess(source);
-          return resp.json();
-        }
-        if (resp.status === 404 && is404Ok) return null;
-        if (resp.status === 429) {
-          rateBackoff(source);
-          if (attempt < retries) {
-            const wait = RETRY_BASE_MS * Math.pow(2, attempt);
-            console.warn(`Rate limited (429) on attempt ${attempt + 1}, retrying in ${wait}ms...`);
-            await sleep(wait);
-            continue;
-          }
-        }
-        return null;
-      } catch (err) {
-        rateBackoff(source);
-        if (attempt < retries) {
-          const wait = RETRY_BASE_MS * Math.pow(2, attempt);
-          console.warn(`Request failed (${err.message}), retrying in ${wait}ms...`);
-          await sleep(wait);
-          continue;
-        }
-        console.warn(`Request failed after ${retries + 1} attempts:`, err.message);
-        return null;
-      }
-    }
-    return null;
-  }
-
-  // ─── API searches ────────────────────────────────────────────────────
-  async function searchSSMatch(title) {
-    const data = await fetchJSON(SS_MATCH, { query: title, fields: SS_FIELDS }, { is404Ok: true });
-    if (!data?.data?.[0]) return null;
-    return B.ssToStandard(data.data[0]);
-  }
-
-  async function searchSSSearch(title) {
-    const data = await fetchJSON(SS_SEARCH, { query: title, limit: "5", fields: SS_FIELDS });
-    return (data?.data || []).map(B.ssToStandard);
-  }
-
-  async function searchCrossref(title) {
-    const data = await fetchJSON(CROSSREF_API, {
-      "query.title": title, rows: "5",
-      select: "title,author,published-print,published-online,container-title,volume,issue,page,DOI,publisher,URL,type",
-    });
-    return (data?.message?.items || []).map(B.crossrefToStandard);
-  }
-
-  async function lookupPaper(title) {
-    const ssMatch = await searchSSMatch(title);
-    if (ssMatch && B.titleSimilarity(title, ssMatch.title || "") >= B.MIN_TITLE_SIM) {
-      const crCandidates = await searchCrossref(title);
-      const crMatch = B.bestMatch(crCandidates, title);
-      if (crMatch && B.isSamePaper(ssMatch, crMatch))
-        return B.mergeMetadata(ssMatch, crMatch);
-      return ssMatch;
-    }
-
-    const crCandidates = await searchCrossref(title);
-    const crMatch = B.bestMatch(crCandidates, title);
-    if (crMatch) return crMatch;
-
-    const ssCandidates = await searchSSSearch(title);
-    return B.bestMatch(ssCandidates, title);
-  }
-
-  // ─── Theme ─────────────────────────────────────────────────────────
+  // ─── Theme ─────────────────────────────────────────────────────────────
   const root = document.documentElement;
   const themeToggle = document.getElementById("theme-toggle");
+  function applyTheme(th) { root.setAttribute("data-theme", th); localStorage.setItem("bv-theme", th); }
+  applyTheme(localStorage.getItem("bv-theme") || (window.matchMedia("(prefers-color-scheme:light)").matches ? "light" : "dark"));
+  themeToggle.addEventListener("click", () => applyTheme(root.getAttribute("data-theme") === "dark" ? "light" : "dark"));
 
-  function applyTheme(theme) {
-    root.setAttribute("data-theme", theme);
-    localStorage.setItem("bv-theme", theme);
+  // ─── Language toggle button ────────────────────────────────────────────
+  const heroTopRight = document.querySelector(".hero-top-right");
+  const langBtn = document.createElement("button");
+  langBtn.className = "lang-toggle";
+  langBtn.title = "Switch language / 切换语言";
+  heroTopRight.insertBefore(langBtn, heroTopRight.firstChild);
+  langBtn.addEventListener("click", () => setLang(lang === "en" ? "zh" : "en"));
+
+  function applyLang() {
+    langBtn.textContent = lang === "en" ? "中文" : "EN";
+    const tabs = document.querySelectorAll(".input-tab");
+    if (tabs[0]) tabs[0].textContent = t("upload_tab");
+    if (tabs[1]) tabs[1].textContent = t("paste_tab");
+    const dropLabel = document.querySelector(".upload-zone .label");
+    if (dropLabel) dropLabel.textContent = t("drop_label");
+    const dropSub = document.querySelector(".upload-zone p");
+    if (dropSub) dropSub.textContent = t("drop_sub");
+    const pasteBtn = document.getElementById("btn-verify-paste");
+    if (pasteBtn) pasteBtn.textContent = t("paste_btn");
+    const pasteArea = document.getElementById("bib-paste");
+    if (pasteArea) pasteArea.placeholder = t("paste_placeholder");
+    updateSummary();
+    const btnDl = document.getElementById("btn-download");
+    if (btnDl) btnDl.textContent = t("download");
+    const btnStart = document.getElementById("btn-start-verification");
+    if (btnStart && vState === "idle") btnStart.textContent = t("start_verification");
+    else if (btnStart && vState === "running") btnStart.textContent = t("pause");
+    else if (btnStart && vState === "paused") btnStart.textContent = t("resume");
+    const logClear = document.getElementById("activity-log-clear");
+    if (logClear) logClear.textContent = t("log_clear");
+    if (activityLogCount) activityLogCount.textContent = logCount + " " + t("log_events");
+    const settingsTitle = document.querySelector(".settings-section-title");
+    if (settingsTitle) settingsTitle.textContent = t("settings_title");
+    const settingHelp = document.querySelector(".setting-help");
+    if (settingHelp) settingHelp.textContent = t("settings_help");
+    const apiKeysTitle = document.getElementById("api-keys-title");
+    if (apiKeysTitle) apiKeysTitle.textContent = t("api_keys_title");
+    const apiKeysHelp = document.getElementById("api-keys-help");
+    if (apiKeysHelp) apiKeysHelp.textContent = t("api_keys_help");
+    renderSearchEngineOptions();
+    renderApiKeyOptions();
+    const tocTitleEl = document.getElementById("toc-title");
+    if (tocTitleEl) tocTitleEl.textContent = t("toc_title");
+    if (_appReady && results.length) { entryList.innerHTML = ""; results.forEach(r => renderEntryCard(r)); applyCurrentFilter(); rebuildToc(); }
   }
 
-  const savedTheme = localStorage.getItem("bv-theme") ||
-    (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  applyTheme(savedTheme);
+  // ─── UI State ─────────────────────────────────────────────────────────
+  let parsedEntries = [], parseDiags = [], results = [], decisions = {}, fieldEdits = {};
+  let activeFilter = "all", vState = "idle", currentDetailIdx = -1, resolveWait = null;
+  const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+  const uploadZone = $(".upload-zone"), fileInput = $("#file-input"), resultsSection = $(".results-section");
+  const entryList = $(".entry-list"), floatingBar = $("#floating-bar"), barProgress = $("#bar-progress");
+  const barProgressFill = $(".bar-progress-fill"), barProgressText = $(".bar-progress-text");
+  const btnStartVerify = $("#btn-start-verification"), btnDownload = $("#btn-download");
+  const searchEngineOptions = $("#search-engine-options");
+  const activityLogLines = $("#activity-log-lines"), activityLogCount = $("#activity-log-count");
 
-  themeToggle.addEventListener("click", () => {
-    applyTheme(root.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  // ─── TOC sidebar ───────────────────────────────────────────────────────
+  const tocSidebar  = $("#toc-sidebar");
+  const tocOpenBtn  = $("#toc-open-btn");
+  const tocBody     = $("#toc-body");
+  const tocToggle   = $("#toc-toggle");
+  let tocCollapsed  = false;
+  let tocObserver   = null;
+
+  function rebuildToc() {
+    if (!tocBody) return;
+    // collect visible entries
+    const items = results.filter(r => {
+      if (activeFilter === "all") return true;
+      if (activeFilter === "duplicate") return !!r.duplicate_of;
+      return r.status === activeFilter;
+    });
+    tocBody.innerHTML = "";
+    if (!items.length) { hideToc(); return; }
+    items.forEach((r, i) => {
+      const el = document.createElement("div");
+      el.className = "toc-item";
+      el.dataset.tocEntry = r.index;
+      const dotCls = r.duplicate_of ? "toc-dot-duplicate" : "toc-dot-" + r.status;
+      el.innerHTML =
+        '<span class="toc-item-num">' + (i + 1) + '</span>' +
+        '<span class="toc-item-status ' + dotCls + '"></span>' +
+        '<span class="toc-item-title">' + esc(r.title || t("no_title")) + '</span>';
+      el.addEventListener("click", () => scrollToCard(r.index));
+      tocBody.appendChild(el);
+    });
+    showToc();
+    rewireTocObserver(items);
+  }
+
+  function scrollToCard(idx) {
+    const card = document.getElementById("card-" + idx);
+    if (!card) return;
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+    card.classList.remove("toc-flash");
+    void card.offsetWidth;
+    card.classList.add("toc-flash");
+  }
+
+  function rewireTocObserver(items) {
+    if (tocObserver) tocObserver.disconnect();
+    tocObserver = new IntersectionObserver(entries => {
+      entries.forEach(en => {
+        const idx = parseInt(en.target.dataset.index);
+        const tocItem = tocBody.querySelector('[data-toc-entry="' + idx + '"]');
+        if (tocItem) tocItem.classList.toggle("toc-active", en.isIntersecting);
+      });
+    }, { threshold: 0.15 });
+    items.forEach(r => {
+      const card = document.getElementById("card-" + r.index);
+      if (card) tocObserver.observe(card);
+    });
+  }
+
+  function showToc() {
+    if (!tocSidebar) return;
+    if (!tocCollapsed) {
+      tocSidebar.classList.add("visible");
+      if (tocOpenBtn) tocOpenBtn.classList.remove("visible");
+    } else {
+      if (tocOpenBtn) tocOpenBtn.classList.add("visible");
+    }
+  }
+
+  function hideToc() {
+    if (tocSidebar) tocSidebar.classList.remove("visible");
+    if (tocOpenBtn) tocOpenBtn.classList.remove("visible");
+  }
+
+  if (tocToggle) tocToggle.addEventListener("click", () => {
+    tocCollapsed = true;
+    tocSidebar.classList.remove("visible");
+    if (tocOpenBtn && tocBody.children.length) tocOpenBtn.classList.add("visible");
   });
 
-  // ─── UI State ──────────────────────────────────────────────────────
-  let parsedEntries = [];
-  let results = [];
-  let decisions = {};
-  let fieldEdits = {};
-  let activeFilter = "all";
+  if (tocOpenBtn) tocOpenBtn.addEventListener("click", () => {
+    tocCollapsed = false;
+    tocOpenBtn.classList.remove("visible");
+    if (tocBody.children.length) tocSidebar.classList.add("visible");
+  });
+  let logCount = 0;
+  function addLog(level, text) {
+    if (!activityLogLines) return;
+    const now = new Date();
+    const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2,"0")).join(":");
+    const line = document.createElement("div");
+    line.className = "activity-line activity-line-" + level;
+    line.innerHTML = '<span class="activity-line-time">' + time + '</span><span class="activity-line-level">' + level + '</span><span class="activity-line-text">' + esc(text) + '</span>';
+    activityLogLines.appendChild(line);
+    activityLogLines.scrollTop = activityLogLines.scrollHeight;
+    logCount++;
+    if (activityLogCount) activityLogCount.textContent = logCount + " " + t("log_events");
+  }
 
-  const $ = (sel) => document.querySelector(sel);
-  const $$ = (sel) => document.querySelectorAll(sel);
+  // ─── Search engine options ─────────────────────────────────────────────
+  function renderSearchEngineOptions() {
+    if (!searchEngineOptions) return;
+    const prev = {};
+    searchEngineOptions.querySelectorAll("input[data-engine]").forEach(el => { prev[el.dataset.engine] = el.checked; });
+    const tiers = [
+      { key: "tier1", engines: [
+        { id: "dblp", label: "DBLP" }, { id: "crossref", label: "CrossRef" }, { id: "semantic_scholar", label: "Semantic Scholar" }
+      ]},
+      { key: "tier2", engines: [
+        { id: "cvf", label: "CVF (CVPR/ICCV/WACV)" }, { id: "openreview", label: "OpenReview" }
+      ]},
+      { key: "tier3", engines: [{ id: "arxiv", label: "arXiv" }] }
+    ];
+    let html = "";
+    for (const tier of tiers) {
+      html += '<div class="engine-tier"><div class="tier-label">' + esc(t(tier.key)) + '</div><div class="tier-engines">';
+      for (const e of tier.engines) {
+        const checked = Object.prototype.hasOwnProperty.call(prev, e.id) ? prev[e.id] : true;
+        html += '<label class="option-toggle engine-option"><input type="checkbox" class="opt-search-engine" data-engine="' + e.id + '"' + (checked ? " checked" : "") + ' /><span>' + esc(e.label) + '</span></label>';
+      }
+      html += '</div></div>';
+    }
+    searchEngineOptions.innerHTML = html;
+  }
+  function getSelectedSearchEngines() { return [...document.querySelectorAll(".opt-search-engine[data-engine]:checked")].map(el => el.dataset.engine); }
+  renderSearchEngineOptions();
 
-  const uploadZone = $(".upload-zone");
-  const fileInput = $("#file-input");
-  const resultsSection = $(".results-section");
-  const entryList = $(".entry-list");
-  const floatingBar = $("#floating-bar");
-  const barProgress = $("#bar-progress");
-  const barProgressFill = $(".bar-progress-fill");
-  const barProgressText = $(".bar-progress-text");
-  const btnDownload = $("#btn-download");
-  const mainColumns = $("#main-columns");
-  const colPreview = $("#col-preview");
-  const previewCode = $("#preview-code");
-  const previewPlaceholder = $(".preview-placeholder");
+  // ─── API Key options ───────────────────────────────────────────────────
+  const API_KEY_SOURCES = [
+    { id: "semantic_scholar", label: "Semantic Scholar", storageKey: "bv-apikey-ss",
+      link: "https://www.semanticscholar.org/product/api" },
+  ];
 
-  // ─── Tab switching ─────────────────────────────────────────────────
-  const inputTabs = $$(".input-tab");
-  const tabPanels = $$(".tab-panel");
+  function renderApiKeyOptions() {
+    const container = document.getElementById("api-keys-options");
+    if (!container) return;
+    container.innerHTML = "";
+    for (const src of API_KEY_SOURCES) {
+      const saved = localStorage.getItem(src.storageKey) || "";
+      const row = document.createElement("div");
+      row.className = "api-key-row";
+      row.id = "api-key-row-" + src.id;
+      row.innerHTML =
+        '<label class="api-key-label"><a class="api-key-source-link" href="' + escAttr(src.link) + '" target="_blank" rel="noopener">' + esc(src.label) + '</a></label>' +
+        '<input class="api-key-input" type="password" data-source="' + escAttr(src.id) + '" placeholder="' + esc(t("api_key_placeholder")) + '" value="' + escAttr(saved) + '" autocomplete="off" spellcheck="false" />';
+      container.appendChild(row);
+    }
+    container.querySelectorAll(".api-key-input").forEach(input => {
+      input.addEventListener("input", () => {
+        const src = API_KEY_SOURCES.find(s => s.id === input.dataset.source);
+        if (!src) return;
+        // clear any previous auth error when user edits the key
+        clearApiKeyError(src.id);
+        const val = input.value.trim();
+        if (val) localStorage.setItem(src.storageKey, val);
+        else localStorage.removeItem(src.storageKey);
+      });
+    });
+  }
 
-  inputTabs.forEach(tab => {
+  function showApiKeyError(sourceId, statusCode) {
+    const row = document.getElementById("api-key-row-" + sourceId);
+    if (!row) return;
+    row.classList.add("api-key-row-error");
+    const input = row.querySelector(".api-key-input");
+    if (input) input.classList.add("api-key-input-error");
+    if (!row.querySelector(".api-key-error-msg")) {
+      const msg = document.createElement("div");
+      msg.className = "api-key-error-msg";
+      msg.innerHTML = t("api_key_auth_error_" + statusCode) || t("api_key_auth_error");
+      row.appendChild(msg);
+    }
+    // also open the settings popover so the user notices
+    settingsPopover.classList.add("open");
+    settingsToggle.classList.add("active");
+  }
+
+  function clearApiKeyError(sourceId) {
+    const row = document.getElementById("api-key-row-" + sourceId);
+    if (!row) return;
+    row.classList.remove("api-key-row-error");
+    const input = row.querySelector(".api-key-input");
+    if (input) input.classList.remove("api-key-input-error");
+    row.querySelector(".api-key-error-msg")?.remove();
+  }
+
+  function getApiKey(sourceId) {
+    const src = API_KEY_SOURCES.find(s => s.id === sourceId);
+    return src ? (localStorage.getItem(src.storageKey) || "") : "";
+  }
+
+  renderApiKeyOptions();
+
+  // Register auth-error callback so app-core can notify us
+  BV.setAuthErrCb((source, statusCode) => {
+    const srcId = source === "ss" ? "semantic_scholar" : source;
+    addLog("error", t("api_key_auth_error") + " (" + srcId + " HTTP " + statusCode + ")");
+    showApiKeyError(srcId, statusCode);
+  });
+
+  // ─── Tab switching ─────────────────────────────────────────────────────
+  $$(".input-tab").forEach(tab => {
     tab.addEventListener("click", () => {
-      inputTabs.forEach(t => t.classList.remove("active"));
-      tabPanels.forEach(p => p.classList.remove("active"));
+      $$(".input-tab").forEach(t => t.classList.remove("active"));
+      $$(".tab-panel").forEach(p => p.classList.remove("active"));
       tab.classList.add("active");
-      $(`#tab-${tab.dataset.tab}`).classList.add("active");
+      $("#tab-" + tab.dataset.tab).classList.add("active");
     });
   });
 
-  // ─── Upload handling ──────────────────────────────────────────────
+  // ─── Upload / Paste ────────────────────────────────────────────────────
   uploadZone.addEventListener("click", () => fileInput.click());
-
-  uploadZone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    uploadZone.classList.add("dragover");
-  });
-
+  uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
   uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+  uploadZone.addEventListener("drop", e => { e.preventDefault(); uploadZone.classList.remove("dragover"); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+  async function handleFile(file) { if (!file.name.endsWith(".bib")) { alert(t("upload_bib_only")); return; } parseAndShow(await file.text()); }
 
-  uploadZone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    uploadZone.classList.remove("dragover");
-    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-  });
+  const bibPaste = $("#bib-paste"), btnVerifyPaste = $("#btn-verify-paste");
+  btnVerifyPaste.addEventListener("click", () => { const c = bibPaste.value.trim(); if (!c) { alert(t("paste_first")); return; } parseAndShow(c); });
 
-  fileInput.addEventListener("change", () => {
-    if (fileInput.files[0]) handleFile(fileInput.files[0]);
-  });
-
-  async function handleFile(file) {
-    if (!file.name.endsWith(".bib")) { alert("Please upload a .bib file."); return; }
-    const content = await file.text();
-    startVerificationFromContent(content, "Reading file...");
-  }
-
-  // ─── Paste handling ───────────────────────────────────────────────
-  const bibPaste = $("#bib-paste");
-  const btnVerifyPaste = $("#btn-verify-paste");
-
-  btnVerifyPaste.addEventListener("click", () => {
-    const content = bibPaste.value.trim();
-    if (!content) { alert("Please paste your BibTeX content first."); return; }
-    startVerificationFromContent(content, "Parsing pasted content...");
-  });
-
-  function startVerificationFromContent(content, statusMsg) {
-    results = [];
-    decisions = {};
-    fieldEdits = {};
-    activeFilter = "all";
-    entryList.innerHTML = "";
-    rateState.ssDelay = 500;
-    rateState.crDelay = 100;
-    rateState.ssConsecutiveOk = 0;
-    rateState.crConsecutiveOk = 0;
+  // ─── Parse & Show ──────────────────────────────────────────────────────
+  function parseAndShow(content) {
+    results = []; decisions = {}; fieldEdits = {}; activeFilter = "all"; vState = "idle";
+    currentDetailIdx = -1;
+    entryList.innerHTML = ""; logCount = 0;
+    if (activityLogLines) activityLogLines.innerHTML = "";
+    if (activityLogCount) activityLogCount.textContent = "0 " + t("log_events");
     $$(".info-section").forEach(s => s.style.display = "none");
     resultsSection.style.display = "none";
+    floatingBar.classList.add("visible"); barProgress.classList.remove("active");
 
-    barProgress.classList.add("active");
-    barProgress.classList.remove("fade-out");
-    barProgressFill.style.width = "0%";
-    barProgressFill.classList.remove("done");
-    barProgressText.textContent = statusMsg;
-    btnDownload.classList.add("hidden");
-    btnDownload.classList.remove("fade-in");
-    floatingBar.classList.add("visible");
-
-    mainColumns.classList.add("two-col");
-    colPreview.classList.add("visible");
-    previewPlaceholder.style.display = "flex";
-    previewCode.style.display = "none";
-    previewCode.textContent = "";
-
-    parsedEntries = B.parseBib(content);
-
-    if (!parsedEntries.length) {
-      alert("No BibTeX entries found. Make sure the content contains valid @type{key, ...} entries.");
-      floatingBar.classList.remove("visible");
-      return;
-    }
-
+    const doc = B.parseBibDocument(content);
+    parsedEntries = doc.entries; parseDiags = doc.diagnostics || [];
+    if (!parsedEntries.length) { alert(t("no_entries")); floatingBar.classList.remove("visible"); return; }
     resultsSection.style.display = "block";
-    barProgressText.textContent = `Verifying 0 / ${parsedEntries.length} entries...`;
-    runVerification();
+    const seenTitles = new Map();
+    for (let i = 0; i < parsedEntries.length; i++) {
+      const entry = parsedEntries[i], title = entry.title || "", entryId = entry.ID || "entry_" + i;
+      const normKey = B.normalizeTitle(title);
+      let dupOf = null;
+      if (normKey && seenTitles.has(normKey)) dupOf = seenTitles.get(normKey);
+      else if (normKey) seenTitles.set(normKey, entryId);
+      const entryDiags = parseDiags.filter(d => d.entry_id === entryId && d.severity === "error");
+      let status = "parsed";
+      if (entryDiags.length > 0) status = "error";
+      else if (dupOf) status = "duplicate";
+      results.push({
+        index: i, entry_id: entryId, entry_type: entry.ENTRYTYPE || "", title, status,
+        title_score: 0, field_diffs: [], suggested: {}, found_title: "", duplicate_of: dupOf,
+        found: null, candidates: [], selectedCandidateIdx: 0
+      });
+    }
+    results.forEach(r => renderEntryCard(r));
+    updateSummary(); rebuildToc();
+    btnStartVerify.classList.remove("hidden"); btnStartVerify.textContent = t("start_verification");
+    btnDownload.classList.add("hidden");
+    barProgressText.textContent = parsedEntries.length + " " + t("entries_parsed");
   }
+
+  // ─── Start / Pause / Resume ────────────────────────────────────────────
+  btnStartVerify.addEventListener("click", () => {
+    if (vState === "idle") {
+      if (!getSelectedSearchEngines().length) { alert(t("select_source")); return; }
+      vState = "running"; btnStartVerify.textContent = t("pause"); runVerification();
+    } else if (vState === "running") {
+      vState = "paused"; btnStartVerify.textContent = t("resume");
+    } else if (vState === "paused") {
+      vState = "running"; btnStartVerify.textContent = t("pause"); if (resolveWait) { resolveWait(); resolveWait = null; }
+    }
+  });
+  async function waitIfPaused() { while (vState === "paused") await new Promise(r => { resolveWait = r; }); }
 
   async function runVerification() {
     const total = parsedEntries.length;
-    const seenTitles = new Map();
-
+    barProgress.classList.add("active"); barProgress.classList.remove("fade-out");
+    barProgressFill.style.width = "0%"; barProgressFill.classList.remove("done");
     for (let i = 0; i < total; i++) {
-      const entry = parsedEntries[i];
-      const title = entry.title || "";
-      const entryId = entry.ID || `entry_${i}`;
-
-      const normKey = B.normalizeTitle(title);
-      if (normKey && seenTitles.has(normKey)) {
-        entry._duplicateOf = seenTitles.get(normKey);
-      } else if (normKey) {
-        seenTitles.set(normKey, entryId);
-      }
-
+      if (vState !== "running" && vState !== "paused") break;
+      await waitIfPaused(); if (vState !== "running") break;
+      const r = results[i];
+      if (r.status !== "parsed") continue;
+      const entry = parsedEntries[i], title = entry.title || "";
       const pct = Math.round(((i + 1) / total) * 100);
       barProgressFill.style.width = pct + "%";
-      barProgressText.textContent = `Verifying ${i + 1} / ${total}: ${title.slice(0, 50)}…`;
-
-      if (!title.trim()) {
-        const r = buildResult(entry, i, "not_found", 0, [], {}, null);
-        results.push(r);
-        renderEntryCard(r);
-        updateSummary();
-        updatePreview();
-        continue;
-      }
-
-      const cleanTitle = B.stripLatex(title);
-      let found = null;
-      try { found = await lookupPaper(cleanTitle); } catch (err) { console.warn("Lookup failed:", err); }
-
+      barProgressText.textContent = t("verifying") + " " + (i+1) + " / " + total + ": " + title.slice(0, 50);
+      if (!title.trim()) { r.status = "not_found"; replaceCard(i); updateSummary(); continue; }
+      let lookupResult = { best: null, candidates: [] };
+      try { lookupResult = await BV.lookupTiered(title, entry, addLog, getSelectedSearchEngines, getApiKey); } catch (err) { console.warn("Lookup failed:", err); }
+      const { best: found, candidates } = lookupResult;
+      r.candidates = candidates || [];
+      r.selectedCandidateIdx = 0;
       if (!found) {
-        const r = buildResult(entry, i, "not_found", 0, [], {}, null);
-        results.push(r);
-        renderEntryCard(r);
+        r.status = "not_found"; r.found = null;
       } else {
-        const cmp = B.compareEntry(entry, found);
-        let fieldDiffs = cmp.field_diffs;
-        if (cmp.status === "needs_review" && found)
-          fieldDiffs = B.fieldDiffsForNeedsReview(entry, found);
-        const r = buildResult(entry, i, cmp.status, cmp.title_score, fieldDiffs, cmp.suggested, found);
-        results.push(r);
-        renderEntryCard(r);
+        applyCandidate(r, entry, found);
       }
-
-      updateSummary();
-      updateAuthorPills();
-      updatePreview();
+      replaceCard(i); updateSummary(); rebuildToc();
     }
-
-    barProgressFill.classList.add("done");
-    barProgressText.textContent = `Done — ${total} entries verified`;
-    setTimeout(() => {
-      barProgress.classList.add("fade-out");
-      setTimeout(() => {
-        barProgress.classList.remove("active", "fade-out");
-        btnDownload.classList.remove("hidden");
-        btnDownload.classList.add("fade-in");
-      }, 350);
-    }, 800);
+    vState = "done"; barProgressFill.classList.add("done");
+    barProgressText.textContent = t("done") + " — " + total + " " + t("entries_verified");
+    btnStartVerify.textContent = t("start_verification"); btnStartVerify.classList.add("hidden");
+    checkExportAllowed();
+    setTimeout(() => { barProgress.classList.add("fade-out"); setTimeout(() => barProgress.classList.remove("active", "fade-out"), 350); }, 800);
   }
 
-  function buildResult(entry, index, status, titleScore, fieldDiffs, suggested, found) {
-    return {
-      index,
-      entry_id: entry.ID || "",
-      entry_type: entry.ENTRYTYPE || "",
-      title: entry.title || "",
-      status,
-      title_score: titleScore,
-      field_diffs: fieldDiffs,
-      suggested,
-      found_title: found ? (found.title || "") : "",
-      duplicate_of: entry._duplicateOf || null,
-    };
+  function applyCandidate(r, entry, found) {
+    const cmp = B.compareEntry(entry, found);
+    let fd = cmp.field_diffs;
+    if (cmp.status === "needs_review" && found) fd = B.fieldDiffsForNeedsReview(entry, found);
+    r.status = cmp.status; r.title_score = cmp.title_score; r.field_diffs = fd;
+    r.suggested = cmp.suggested; r.found_title = found.title || ""; r.found = found;
   }
 
-  // ─── Rendering ────────────────────────────────────────────────────
+  function checkExportAllowed() {
+    btnDownload.classList.remove("hidden");
+    btnDownload.classList.add("fade-in");
+    const errCount    = results.filter(r => r.status === "error").length;
+    const nfCount     = results.filter(r => r.status === "not_found").length;
+    const dupCount    = results.filter(r => r.duplicate_of).length;
+    let warnEl = document.getElementById("export-warn");
+    if (errCount || nfCount || dupCount) {
+      const parts = [];
+      if (errCount) parts.push(errCount + " " + t("badge_error").toLowerCase());
+      if (nfCount)  parts.push(nfCount  + " " + t("badge_notfound").toLowerCase());
+      if (dupCount) parts.push(dupCount + " " + t("badge_duplicates").toLowerCase());
+      const msg = parts.join(", ");
+      if (!warnEl) {
+        warnEl = document.createElement("span");
+        warnEl.id = "export-warn";
+        warnEl.className = "export-warn";
+        btnDownload.insertAdjacentElement("afterend", warnEl);
+      }
+      warnEl.textContent = "⚠ " + msg;
+    } else {
+      if (warnEl) warnEl.remove();
+    }
+  }
+
   function statusLabel(s) {
-    return { verified: "Verified", updated: "Auto-Updated", needs_review: "Needs Review", not_found: "Not Found" }[s] || s;
+    const map = { parsed:"status_parsed", verified:"status_verified", updated:"status_updated",
+      needs_review:"status_needs_review", not_found:"status_not_found", error:"status_error", duplicate:"status_duplicate" };
+    return t(map[s] || "status_parsed");
   }
 
+  // ─── Card rendering ────────────────────────────────────────────────────
   function renderEntryCard(r) {
     const card = document.createElement("div");
-    card.className = `entry-card status-${r.status}`;
-    card.dataset.status = r.status;
-    card.dataset.index = r.index;
+    card.id = "card-" + r.index; card.className = "entry-card status-" + r.status;
+    card.dataset.status = r.status; card.dataset.index = r.index;
     if (r.duplicate_of) card.dataset.duplicate = "true";
+    card.innerHTML = buildCardHTML(r);
+    applyFilterToCard(card, r);
+    entryList.appendChild(card);
+    if (r.status === "updated" || r.status === "needs_review") renderDetailInCard(r.index);
+  }
 
-    const idx = r.index;
+  function replaceCard(idx) {
+    const old = document.getElementById("card-" + idx);
+    if (old) old.remove();
+    const r = results[idx], card = document.createElement("div");
+    card.id = "card-" + idx; card.className = "entry-card status-" + r.status;
+    card.dataset.status = r.status; card.dataset.index = r.index;
+    if (r.duplicate_of) card.dataset.duplicate = "true";
+    card.innerHTML = buildCardHTML(r);
+    applyFilterToCard(card, r);
+    entryList.appendChild(card);
+    if (r.status === "updated" || r.status === "needs_review") renderDetailInCard(idx);
+  }
+
+  function applyFilterToCard(card, r) {
+    if (activeFilter !== "all") {
+      if (activeFilter === "duplicate") { if (!r.duplicate_of) card.classList.add("hidden"); }
+      else if (card.dataset.status !== activeFilter) card.classList.add("hidden");
+    }
+  }
+
+  function applyCurrentFilter() {
+    $$(".entry-card").forEach(card => {
+      const r = results[parseInt(card.dataset.index)];
+      if (!r) return;
+      if (activeFilter === "all") { card.classList.remove("hidden"); return; }
+      if (activeFilter === "duplicate") card.classList.toggle("hidden", !r.duplicate_of);
+      else card.classList.toggle("hidden", card.dataset.status !== activeFilter);
+    });
+  }
+
+  function buildDiffRow(d, idx, r) {
+    const isEn = !(d.original || "").trim();
+    const da = r.status === "updated" ? "found" : "original";
+    if (!fieldEdits[idx][d.field]) fieldEdits[idx][d.field] = { action: da, value: d.found || "" };
+    const fe = fieldEdits[idx][d.field], ca = fe.action;
+    const st = ca === "custom" ? (fe.value || "") : (d.found || "");
+    const oa = encodeURIComponent(d.original || ""), fa = encodeURIComponent(d.found || "");
+    const xSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    let origCell = !isEn
+      ? '<button class="choice-pill pill-original ' + (ca === "original" ? "active" : "") + '" data-entry="' + idx + '" data-field="' + escAttr(d.field) + '" data-action="original" data-val="' + escAttr(d.original || "") + '">' + esc(d.original) + '</button>'
+      : '<span class="empty-val">—</span>';
+    let sugCell = (r.status === "updated" || r.status === "needs_review")
+      ? '<span class="choice-pill pill-suggested ' + (ca === "found" || ca === "custom" ? "active" : "") + ' ' + (ca === "remove" ? "removed" : "") + '" contenteditable="' + (ca === "remove" ? "false" : "true") + '" spellcheck="false" data-entry="' + idx + '" data-field="' + escAttr(d.field) + '" data-action="found" data-val="' + escAttr(d.found || "") + '">' + esc(st) + '</span>'
+      : "";
+    return '<tr class="diff-row" data-entry="' + idx + '" data-field="' + escAttr(d.field) + '" data-action="' + escAttr(ca) + '" data-enrichment="' + (isEn ? "1" : "") + '" data-found-val="' + escAttr(fa) + '" data-original-val="' + escAttr(oa) + '"><td class="field-name"><span class="field-name-pill">' + esc(d.field) + '</span></td><td class="val-col val-col-original">' + origCell + '</td><td class="val-col val-col-suggested">' + sugCell + '</td><td class="field-actions-mini"><button class="fa-btn-x ' + (ca === "remove" ? "active" : "") + '" title="' + (isEn ? "Don\'t add" : "Remove field") + '" data-entry="' + idx + '" data-field="' + escAttr(d.field) + '" data-action="remove" data-val="">' + xSvg + '</button></td></tr>';
+  }
+
+  function buildCardHTML(r) {
+    const idx = r.index, entry = parsedEntries[idx];
     if (!fieldEdits[idx]) fieldEdits[idx] = {};
-    const entry = parsedEntries[idx];
+    const needsEdit = r.status === "updated" || r.status === "needs_review";
 
-    let diffHTML = "";
-    const hasDiffs = r.field_diffs?.length > 0;
-    const hasSuggestion = r.status === "updated" || r.status === "needs_review";
-
-    if (hasDiffs) {
-      const rows = r.field_diffs.map(d => {
-        const isEnrichment = !(d.original || "").trim();
-        const defaultAction = r.status === "updated" ? "found" : "original";
-
-        if (!fieldEdits[idx][d.field]) {
-          fieldEdits[idx][d.field] = {
-            action: defaultAction,
-            value: d.found || "",
-          };
-        }
-        const fe = fieldEdits[idx][d.field];
-        const currentAction = fe.action;
-
-        const suggestionText = currentAction === "custom" ? (fe.value || "") : (d.found || "");
-        const origAttr = encodeURIComponent(d.original || "");
-        const foundAttr = encodeURIComponent(d.found || "");
-
-        // Apply author truncation for display (suggested only)
-        const maxA = parseInt(optMaxAuthors.value) || 0;
-        const displaySuggestion = (d.field === "author" && maxA > 0 && currentAction !== "custom") ? truncateAuthors(suggestionText, maxA) : suggestionText;
-        const authorMatchHidden = (d.field === "author" && maxA > 0 && displaySuggestion.trim() === (d.original || "").trim());
-
-        return `<tr class="diff-row${authorMatchHidden ? " author-match-hidden" : ""}" data-entry="${idx}" data-field="${esc(d.field)}" data-action="${currentAction}"
-          data-enrichment="${isEnrichment ? "1" : ""}"
-          data-found-val="${foundAttr}"
-          data-original-val="${origAttr}">
-          <td class="field-name"><span class="field-name-pill">${esc(d.field)}</span></td>
-          <td class="val-col val-col-original">
-            ${!isEnrichment ? `<button class="choice-pill pill-original ${currentAction === "original" ? "active" : ""}"
-                    data-entry="${idx}" data-field="${esc(d.field)}" data-action="original" data-val="${esc(d.original || "")}"
-                    title="Keep your value">${esc(d.original)}</button>` : '<span class="empty-val">\u2014</span>'}
-          </td>
-          <td class="val-col val-col-suggested">
-            ${hasSuggestion ? `<span class="choice-pill pill-suggested ${currentAction === "found" || currentAction === "custom" ? "active" : ""} ${currentAction === "remove" ? "removed" : ""}"
-                    contenteditable="${currentAction === "remove" ? "false" : "true"}"
-                    spellcheck="false"
-                    data-entry="${idx}" data-field="${esc(d.field)}" data-action="found" data-val="${esc(d.found || "")}"
-                    title="Use suggested value (click to select, edit to customize)">${esc(displaySuggestion)}</span>` : ""}
-          </td>
-          <td class="field-actions-mini">
-            <button class="fa-btn-x ${currentAction === "remove" ? "active" : ""}" title="${isEnrichment ? "Don\u2019t add" : "Remove field"}"
-                    data-entry="${idx}" data-field="${esc(d.field)}" data-action="remove" data-val="">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </td>
-        </tr>`;
-      }).join("");
-
-      diffHTML = `<table class="diff-table">
-        <tr><th>Field</th><th>Your Value</th><th>Suggested</th><th></th></tr>
-        ${rows}
-      </table>`;
-    }
-
-    const EDITABLE_FIELDS = ["title", ...B.COMPARED_FIELDS];
-    const diffFieldsSet = new Set((r.field_diffs || []).map(d => d.field));
-    const extraFields = EDITABLE_FIELDS.filter(f => !diffFieldsSet.has(f) && (entry[f] || "").trim());
-
-    if (extraFields.length) {
-      const extraRows = extraFields.map(f => {
-        const val = entry[f] || "";
-        if (!fieldEdits[idx][f]) {
-          fieldEdits[idx][f] = { action: "original", value: val };
-        }
-        const fe = fieldEdits[idx][f];
-        const currentAction = fe.action;
-
-        return `<tr class="diff-row field-row-plain" data-entry="${idx}" data-field="${esc(f)}" data-action="${currentAction}">
-          <td class="field-name"><span class="field-name-pill">${esc(f)}</span></td>
-          <td class="val-col" colspan="2">
-            <span class="choice-pill pill-value ${currentAction === "remove" ? "removed" : "active"}"
-                  contenteditable="${currentAction === "remove" ? "false" : "true"}" spellcheck="false"
-                  data-entry="${idx}" data-field="${esc(f)}">${esc(currentAction === "remove" ? "" : fe.value)}</span>
-          </td>
-          <td class="field-actions-mini">
-            <button class="fa-btn-x ${currentAction === "remove" ? "active" : ""}" title="Remove field"
-                    data-entry="${idx}" data-field="${esc(f)}" data-action="remove" data-val="">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </td>
-        </tr>`;
-      }).join("");
-
-      const fieldsLabel = hasDiffs ? "Other fields" : "Fields";
-      const collapsed = true;
-      diffHTML += `<div class="fields-toggle-wrap${collapsed ? " collapsed" : ""}">
-        <button class="fields-toggle-btn" type="button">
-          <svg class="fields-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-          ${fieldsLabel} (${extraFields.length})
-        </button>
-        <table class="diff-table fields-table">
-          <tr><th>Field</th><th colspan="2">Value</th><th></th></tr>
-          ${extraRows}
-        </table>
-      </div>`;
-    }
-
-    let duplicateHTML = "";
-    if (r.duplicate_of)
-      duplicateHTML = `<div class="duplicate-row">Duplicate of <strong>${esc(r.duplicate_of)}</strong></div>`;
-
-    let reviewHintHTML = "";
-    if (r.status === "needs_review" && r.found_title) {
-      reviewHintHTML = `<div class="review-hint">The closest database record may not be the paper you meant
-        (<strong>${esc(String(r.title_score))}%</strong> title similarity to
-        <strong class="review-hint-match">${esc(r.found_title)}</strong>).
-        Review the suggestions below and use the checkmark on each row to adopt a value, or keep your original text.</div>`;
-    }
-
-    let notFoundHintHTML = "";
-    if (r.status === "not_found") {
-      const hasTitle = (r.title || "").trim();
-      notFoundHintHTML = `<div class="not-found-hint">${hasTitle
-        ? "No matching publication was found in CrossRef or Semantic Scholar for this title. Try fixing typos or adding missing words, then re-run verification, or check the reference manually."
-        : "This entry has no title, so it cannot be looked up automatically. Add a title in your .bib file or verify the entry by hand."}</div>`;
-    }
-
-    let actionsHTML = "";
-    const hasEditable = Object.keys(fieldEdits[idx]).length > 0;
-    if (hasEditable && hasSuggestion && hasDiffs) {
-      const allFound = r.field_diffs.every(d => (fieldEdits[idx][d.field] || {}).action === "found");
-      const allOriginal = r.field_diffs.every(d => (fieldEdits[idx][d.field] || {}).action === "original");
-      actionsHTML = `<div class="entry-actions">
-        <button class="seg-btn btn-accept-all ${allFound ? "active-accept" : ""}" data-entry="${idx}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          Accept all
-        </button>
-        <button class="seg-btn btn-revert-all ${allOriginal ? "active-revert" : ""}" data-entry="${idx}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 105.64-11.36L1 10"/></svg>
-          Keep original
-        </button>
-      </div>`;
-    }
-
-    const jumpBtn = `<button class="btn-jump-preview" type="button" data-entry-id="${esc(r.entry_id)}" title="Scroll to this entry in the live preview">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-    </button>`;
+    let dupHTML = r.duplicate_of ? '<div class="duplicate-row">' + t("dup_of") + ' <strong>' + esc(r.duplicate_of) + '</strong></div>' : "";
+    let revHTML = "", nfHTML = "", errHTML = "";
+    if (r.status === "needs_review" && r.found_title) revHTML = '<div class="review-hint">' + t("similarity") + ': <strong>' + esc(String(r.title_score)) + '%</strong> — <strong class="review-hint-match">' + esc(r.found_title) + '</strong></div>';
+    if (r.status === "not_found") nfHTML = '<div class="not-found-hint">' + (r.title.trim() ? t("not_found_msg") : t("no_title_msg")) + '</div>';
+    if (r.status === "error") { const diags = parseDiags.filter(d => d.entry_id === r.entry_id); errHTML = '<div class="error-hint">' + diags.map(d => esc(d.message)).join("<br>") + '</div>'; }
 
     const searchQuery = encodeURIComponent(B.stripLatex(r.title || ""));
-    const searchLinks = (r.title || "").trim() ? `<div class="search-links">
-      <a class="search-link" href="https://scholar.google.com/scholar?q=${searchQuery}" target="_blank" rel="noopener" title="Google Scholar">
-        <img src="https://scholar.google.com/favicon.ico" width="14" height="14" alt="Scholar">
-      </a>
-      <a class="search-link" href="https://www.google.com/search?q=${searchQuery}" target="_blank" rel="noopener" title="Google">
-        <img src="https://www.google.com/favicon.ico" width="14" height="14" alt="Google">
-      </a>
-      <a class="search-link" href="https://www.semanticscholar.org/search?q=${searchQuery}" target="_blank" rel="noopener" title="Semantic Scholar">
-        <img src="https://www.semanticscholar.org/favicon.ico" width="14" height="14" alt="S2">
-      </a>
-      <a class="search-link search-link-crossref" href="https://search.crossref.org/?q=${searchQuery}&from_ui=yes" target="_blank" rel="noopener" title="CrossRef">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="search-link-svg">
-          <rect width="24" height="24" rx="4" fill="#f89838"/>
-          <path fill="#fff" fill-rule="evenodd" d="M7 8h10v2H7V8zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/>
-        </svg>
-      </a>
-      <a class="search-link" href="https://dblp.org/search?q=${searchQuery}" target="_blank" rel="noopener" title="DBLP">
-        <img src="https://dblp.org/img/dblp.icon.192x192.png" width="14" height="14" alt="DBLP">
-      </a>
-    </div>` : "";
+    const searchLinksHTML = (r.title || "").trim()
+      ? '<div class="search-links">' +
+          '<a class="search-link" href="https://scholar.google.com/scholar?q=' + searchQuery + '" target="_blank" rel="noopener" title="Google Scholar"><span class="search-link-label">G</span></a>' +
+          '<a class="search-link" href="https://www.semanticscholar.org/search?q=' + searchQuery + '" target="_blank" rel="noopener" title="Semantic Scholar"><span class="search-link-label">S2</span></a>' +
+          '<a class="search-link" href="https://dblp.org/search?q=' + searchQuery + '" target="_blank" rel="noopener" title="DBLP"><span class="search-link-label">D</span></a>' +
+        '</div>'
+      : "";
 
-    card.innerHTML = `<div class="entry-header">
-      <div class="entry-header-text">
-        <div class="entry-title">${esc(r.title || "(no title)")}</div>
-        <div class="entry-meta">${esc(r.entry_id)} &middot; ${esc(r.entry_type)}</div>
-      </div>
-      <div class="entry-header-aside">
-        ${jumpBtn}
-        <div class="entry-tags">
-          ${r.duplicate_of ? '<span class="status-tag tag-duplicate">Duplicate</span>' : ""}
-          <span class="status-tag tag-${r.status}">${statusLabel(r.status)}</span>
-        </div>
-      </div>
-    </div>${duplicateHTML}${reviewHintHTML}${notFoundHintHTML}${diffHTML}${actionsHTML}${searchLinks}`;
+    const headerHTML = '<div class="entry-header"><div class="entry-header-text"><div class="entry-title">' + esc(r.title || t("no_title")) + '</div><div class="entry-meta">' + esc(r.entry_id) + ' &middot; ' + esc(r.entry_type) + '</div></div><div class="entry-header-aside">' + searchLinksHTML + '<div class="entry-tags">' + (r.duplicate_of ? '<span class="status-tag tag-duplicate">' + t("status_duplicate") + '</span>' : "") + '<span class="status-tag tag-' + escAttr(r.status) + '">' + statusLabel(r.status) + '</span></div></div></div>';
 
-    if (activeFilter !== "all") {
-      if (activeFilter === "duplicate") {
-        if (!r.duplicate_of) card.classList.add("hidden");
-      } else if (card.dataset.status !== activeFilter) {
-        card.classList.add("hidden");
-      }
-    }
-
-    entryList.appendChild(card);
-  }
-
-  // ─── Fields table toggle ─────────────────────────────────────────
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".fields-toggle-btn");
-    if (!btn) return;
-    btn.closest(".fields-toggle-wrap").classList.toggle("collapsed");
-  });
-
-  // ─── Jump to preview ─────────────────────────────────────────────
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".btn-jump-preview");
-    if (!btn) return;
-    const entryId = btn.dataset.entryId;
-    const target = previewCode.querySelector(`.diff-line[data-entry-id="${entryId}"]`);
-    if (!target) return;
-
-    const previewBody = previewCode.closest(".preview-body");
-    previewBody.scrollTo({
-      top: target.offsetTop - previewBody.offsetTop - 40,
-      behavior: "smooth",
-    });
-
-    const toHighlight = [];
-    let node = target;
-    while (node) {
-      toHighlight.push(node);
-      const next = node.nextElementSibling;
-      if (!next || next.dataset.entryId) break;
-      node = next;
-    }
-
-    previewCode.querySelectorAll(".highlight-flash").forEach(el =>
-      el.classList.remove("highlight-flash"));
-    void previewCode.offsetWidth;
-    toHighlight.forEach(el => el.classList.add("highlight-flash"));
-  });
-
-  // ─── Autoscroll preview ──────────────────────────────────────────
-  let autoScrollEnabled = true;
-  const btnAutoScroll = $("#btn-autoscroll");
-
-  btnAutoScroll.addEventListener("click", () => {
-    autoScrollEnabled = !autoScrollEnabled;
-    btnAutoScroll.classList.toggle("active", autoScrollEnabled);
-  });
-
-  function getVisibleEntryCard() {
-    const cards = $$(".entry-card:not(.hidden)");
-    const viewMid = window.innerHeight / 2;
-    let best = null;
-    let bestDist = Infinity;
-    for (const card of cards) {
-      const rect = card.getBoundingClientRect();
-      const cardMid = rect.top + rect.height / 2;
-      const dist = Math.abs(cardMid - viewMid);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = card;
-      }
-    }
-    return best;
-  }
-
-  let scrollTicking = false;
-  window.addEventListener("scroll", () => {
-    if (!autoScrollEnabled || !scrollTicking) {
-      scrollTicking = true;
-      requestAnimationFrame(() => {
-        scrollTicking = false;
-        if (!autoScrollEnabled) return;
-        const card = getVisibleEntryCard();
-        if (!card) return;
-        const entryId = card.querySelector(".btn-jump-preview")?.dataset?.entryId;
-        if (!entryId) return;
-        const target = previewCode.querySelector(`.diff-line[data-entry-id="${entryId}"]`);
-        if (!target) return;
-
-        const previewBody = previewCode.closest(".preview-body");
-        const bodyHeight = previewBody.clientHeight;
-        previewBody.scrollTo({
-          top: target.offsetTop - previewBody.offsetTop - bodyHeight / 2 + 20,
-          behavior: "smooth",
-        });
-      });
-    }
-  });
-
-  // ─── Helpers for row visual state ────────────────────────────────
-  function flashRow(row) {
-    row.classList.remove("flash");
-    void row.offsetWidth;
-    row.classList.add("flash");
-  }
-
-  function syncRowState(row, action) {
-    row.dataset.action = action;
-    flashRow(row);
-  }
-
-  function syncBulkBtns(card, idx) {
-    const diffRows = card.querySelectorAll(".diff-row:not(.field-row-plain)");
-    if (!diffRows.length) return;
-    const allFound = [...diffRows].every(r => r.dataset.action === "found");
-    const allOriginal = [...diffRows].every(r => r.dataset.action === "original");
-    const acceptBtn = card.querySelector(".btn-accept-all");
-    const revertBtn = card.querySelector(".btn-revert-all");
-    if (acceptBtn) acceptBtn.classList.toggle("active-accept", allFound);
-    if (revertBtn) revertBtn.classList.toggle("active-revert", allOriginal);
-  }
-
-  // ─── Per-field action handlers ────────────────────────────────────
-  document.addEventListener("click", (e) => {
-    // Handle pill-original click (select original value)
-    const origPill = e.target.closest(".pill-original");
-    if (origPill) {
-      const idx = parseInt(origPill.dataset.entry);
-      const field = origPill.dataset.field;
-      const val = origPill.dataset.val;
-      const row = origPill.closest(".diff-row");
-
-      if (!fieldEdits[idx]) fieldEdits[idx] = {};
-      fieldEdits[idx][field] = { action: "original", value: val };
-
-      row.querySelectorAll(".pill-original").forEach(p => p.classList.add("active"));
-      row.querySelectorAll(".pill-suggested").forEach(p => p.classList.remove("active"));
-      row.querySelectorAll(".fa-btn-x").forEach(b => b.classList.remove("active"));
-
-      const sugPill = row.querySelector(".pill-suggested");
-      if (sugPill) {
-        sugPill.contentEditable = "false";
-        sugPill.classList.remove("removed");
-      }
-
-      syncRowState(row, "original");
-      syncBulkBtns(row.closest(".entry-card"), idx);
-      updatePreview();
-      return;
-    }
-
-    // Handle pill-suggested click (select suggested value) — only respond to click, not during editing
-    const sugPill = e.target.closest(".pill-suggested");
-    if (sugPill && !sugPill.classList.contains("active")) {
-      const idx = parseInt(sugPill.dataset.entry);
-      const field = sugPill.dataset.field;
-      const val = sugPill.dataset.val;
-      const row = sugPill.closest(".diff-row");
-
-      if (!fieldEdits[idx]) fieldEdits[idx] = {};
-      fieldEdits[idx][field] = { action: "found", value: val };
-
-      row.querySelectorAll(".pill-original").forEach(p => p.classList.remove("active"));
-      sugPill.classList.add("active");
-      sugPill.classList.remove("removed");
-      sugPill.contentEditable = "true";
-      row.querySelectorAll(".fa-btn-x").forEach(b => b.classList.remove("active"));
-
-      syncRowState(row, "found");
-      syncBulkBtns(row.closest(".entry-card"), idx);
-      updatePreview();
-      return;
-    }
-
-    // Handle × button click (toggle remove field)
-    const xBtn = e.target.closest(".fa-btn-x");
-    if (xBtn) {
-      const idx = parseInt(xBtn.dataset.entry);
-      const field = xBtn.dataset.field;
-      const row = xBtn.closest(".diff-row");
-      const isEnc = row.dataset.enrichment === "1";
-      const foundVal = decodeURIComponent(row.getAttribute("data-found-val") || "");
-      const origVal = decodeURIComponent(row.getAttribute("data-original-val") || "");
-
-      if (!fieldEdits[idx]) fieldEdits[idx] = {};
-
-      // If already removed, undo back to the default action
-      if (row.dataset.action === "remove") {
-        const r = results[idx];
-        const defaultAction = (r && r.status === "updated") ? "found" : "original";
-        const origVal = decodeURIComponent(row.getAttribute("data-original-val") || "");
-
-        // Handle pill-value (plain field rows)
-        const valPill = row.querySelector(".pill-value");
-        if (valPill) {
-          const restoreVal = origVal || fieldEdits[idx]?.[field]?._savedValue || "";
-          fieldEdits[idx][field] = { action: "original", value: restoreVal };
-          valPill.textContent = restoreVal;
-          valPill.classList.add("active");
-          valPill.classList.remove("removed");
-          valPill.contentEditable = "true";
-          xBtn.classList.remove("active");
-          syncRowState(row, "original");
-        } else if (defaultAction === "found" || isEnc) {
-          fieldEdits[idx][field] = { action: "found", value: foundVal };
-          const sug = row.querySelector(".pill-suggested");
-          if (sug) {
-            sug.classList.add("active");
-            sug.classList.remove("removed");
-            sug.contentEditable = "true";
-            sug.textContent = foundVal;
-          }
-          row.querySelectorAll(".pill-original").forEach(p => p.classList.remove("active"));
-          xBtn.classList.remove("active");
-          syncRowState(row, "found");
-        } else {
-          fieldEdits[idx][field] = { action: "original", value: origVal };
-          row.querySelectorAll(".pill-original").forEach(p => p.classList.add("active"));
-          const sug = row.querySelector(".pill-suggested");
-          if (sug) {
-            sug.classList.remove("active");
-            sug.classList.remove("removed");
-            sug.contentEditable = "false";
-          }
-          xBtn.classList.remove("active");
-          syncRowState(row, "original");
+    if (needsEdit) {
+      // Candidates panel
+      let candidatesHTML = "";
+      if (r.candidates && r.candidates.length > 0) {
+        const ct = B.stripLatex(r.title || "");
+        const top3 = r.candidates.slice(0, 3), rest = r.candidates.slice(3);
+        const renderItem = (c, ci) => {
+          const score = Math.round(B.titleSimilarity(ct, c.title || ""));
+          const scoreClass = score >= 85 ? "score-high" : score >= 70 ? "score-mid" : "score-low";
+          const isActive = ci === (r.selectedCandidateIdx || 0);
+          const src = c._source || "";
+          const meta = [c.year, c.journal || c.booktitle, src].filter(Boolean).join(" · ");
+          const selLabel = isActive ? '<span class="candidate-selected-label">' + t("selected") + '</span>' : "";
+          return '<button class="candidate-item' + (isActive ? " active" : "") + '" data-entry="' + idx + '" data-candidate="' + ci + '"><span class="candidate-rank">#' + (ci+1) + '</span><span class="candidate-body"><span class="candidate-title">' + esc(c.title || t("no_title")) + '</span><span class="candidate-meta">' + esc(meta) + '</span></span><span class="candidate-score ' + scoreClass + '">' + score + '%</span>' + selLabel + '</button>';
+        };
+        let itemsHTML = top3.map((c, i) => renderItem(c, i)).join("");
+        let moreHTML = "";
+        if (rest.length) {
+          const moreItems = rest.map((c, i) => renderItem(c, i + 3)).join("");
+          moreHTML = '<button class="candidates-more-btn" data-entry="' + idx + '"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>' + rest.length + ' ' + t("candidates_more") + '</button><div class="candidates-extra">' + moreItems + '</div>';
         }
-      } else {
-        // Remove the field
-        // Save current value for undo
-        if (fieldEdits[idx][field]) {
-          fieldEdits[idx][field]._savedValue = fieldEdits[idx][field].value;
-        }
-        fieldEdits[idx][field] = { action: "remove", value: "", _savedValue: fieldEdits[idx][field]?._savedValue || "" };
-        row.querySelectorAll(".pill-original").forEach(p => p.classList.remove("active"));
-        const sug = row.querySelector(".pill-suggested");
-        if (sug) {
-          sug.classList.remove("active");
-          sug.classList.add("removed");
-          sug.contentEditable = "false";
-        }
-        const valPill = row.querySelector(".pill-value");
-        if (valPill) {
-          valPill.classList.remove("active");
-          valPill.classList.add("removed");
-          valPill.contentEditable = "false";
-        }
-        xBtn.classList.add("active");
-        syncRowState(row, "remove");
+        candidatesHTML = '<div class="candidates-panel"><div class="candidates-header"><span class="candidates-title">' + t("candidates_title") + '</span><span class="candidates-count">' + r.candidates.length + '</span></div>' + itemsHTML + moreHTML + '</div>';
       }
-      syncBulkBtns(row.closest(".entry-card"), idx);
-      updatePreview();
-      return;
-    }
-
-    // Handle old-style fa-btn (for "other fields" section)
-    const btn = e.target.closest(".fa-btn");
-    if (!btn) return;
-    const idx = parseInt(btn.dataset.entry);
-    const field = btn.dataset.field;
-    const action = btn.dataset.action;
-    const val = btn.dataset.val;
-
-    const row = btn.closest(".diff-row");
-    const isEnc = row.dataset.enrichment === "1";
-    const foundVal = decodeURIComponent(row.getAttribute("data-found-val") || "");
-    const origVal = decodeURIComponent(row.getAttribute("data-original-val") || "");
-
-    if (!fieldEdits[idx]) fieldEdits[idx] = {};
-    if (action === "original")
-      fieldEdits[idx][field] = { action: "original", value: isEnc ? foundVal : val };
-    else if (action === "found")
-      fieldEdits[idx][field] = { action: "found", value: val };
-    else
-      fieldEdits[idx][field] = { action: "remove", value: "" };
-
-    row.querySelectorAll(".fa-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-
-    const span = row.querySelector(".found-text");
-    if (span) {
-      if (action === "found") {
-        span.textContent = foundVal;
-        span.contentEditable = "true";
-      } else if (action === "original") {
-        span.textContent = foundVal;
-        span.contentEditable = "false";
-      } else {
-        span.contentEditable = "false";
-      }
-      span.classList.toggle("removed", action === "remove");
-    }
-
-    syncRowState(row, action);
-    syncBulkBtns(row.closest(".entry-card"), idx);
-    updatePreview();
-  });
-
-  document.addEventListener("input", (e) => {
-    const span = e.target.closest(".found-text[contenteditable], .pill-suggested[contenteditable], .pill-value[contenteditable]");
-    if (!span) return;
-    const idx = parseInt(span.dataset.entry);
-    const field = span.dataset.field;
-    if (!fieldEdits[idx]) fieldEdits[idx] = {};
-    fieldEdits[idx][field] = { action: "custom", value: span.textContent.trim() };
-
-    const row = span.closest(".diff-row");
-    row.querySelectorAll(".fa-btn").forEach(b => b.classList.remove("active"));
-    // For pill UI: mark suggested as active, original as inactive
-    row.querySelectorAll(".pill-original").forEach(p => p.classList.remove("active"));
-    if (span.classList.contains("pill-suggested")) span.classList.add("active");
-    syncRowState(row, "custom");
-    syncBulkBtns(row.closest(".entry-card"), idx);
-    updatePreview();
-  });
-
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".btn-accept-all, .btn-revert-all");
-    if (!btn) return;
-    const idx = parseInt(btn.dataset.entry);
-    const isAccept = btn.classList.contains("btn-accept-all");
-    const card = btn.closest(".entry-card");
-
-    card.querySelectorAll(".diff-row:not(.field-row-plain)").forEach(row => {
-      const field = row.dataset.field;
-      const target = isAccept ? "found" : "original";
-      const isEnc = row.dataset.enrichment === "1";
-      const foundVal = decodeURIComponent(row.getAttribute("data-found-val") || "");
-
-      // New pill-based UI
-      const origPill = row.querySelector(".pill-original");
-      const sugPill = row.querySelector(".pill-suggested");
-
-      if (origPill || sugPill) {
-        if (!fieldEdits[idx]) fieldEdits[idx] = {};
-
-        if (isAccept) {
-          // Accept suggested
-          if (sugPill) {
-            const val = sugPill.dataset.val;
-            fieldEdits[idx][field] = { action: "found", value: val };
-            if (origPill) origPill.classList.remove("active");
-            sugPill.classList.add("active");
-            sugPill.classList.remove("removed");
-            sugPill.contentEditable = "true";
-            sugPill.textContent = foundVal;
-          }
-        } else {
-          // Keep original
-          if (origPill) {
-            fieldEdits[idx][field] = { action: "original", value: origPill.dataset.val };
-            origPill.classList.add("active");
-            if (sugPill) {
-              sugPill.classList.remove("active");
-              sugPill.classList.remove("removed");
-              sugPill.contentEditable = "false";
-            }
-          } else if (isEnc && sugPill) {
-            // Enrichment row: no original pill
-            fieldEdits[idx][field] = { action: "original", value: foundVal };
-            sugPill.classList.remove("active");
-            sugPill.classList.remove("removed");
-            sugPill.contentEditable = "false";
-            sugPill.textContent = foundVal;
-          }
-        }
-
-        row.querySelectorAll(".fa-btn-x").forEach(b => b.classList.remove("active"));
-        syncRowState(row, target);
-      } else {
-        // Fallback for old-style rows
-        const targetBtn = row.querySelector(`.fa-btn[data-action="${target}"]`);
-
-        if (targetBtn) {
-          const val = targetBtn.dataset.val;
-          if (!fieldEdits[idx]) fieldEdits[idx] = {};
-          fieldEdits[idx][field] = { action: target, value: val };
-
-          row.querySelectorAll(".fa-btn").forEach(b => b.classList.remove("active"));
-          targetBtn.classList.add("active");
-
-          const span = row.querySelector(".found-text");
-          if (span) {
-            span.textContent = foundVal;
-            span.classList.remove("removed");
-            span.contentEditable = target === "found" ? "true" : "false";
-          }
-
-          syncRowState(row, target);
-        } else if (!isAccept && isEnc) {
-          if (!fieldEdits[idx]) fieldEdits[idx] = {};
-          fieldEdits[idx][field] = { action: "original", value: foundVal };
-
-          row.querySelectorAll(".fa-btn").forEach(b => b.classList.remove("active"));
-
-          const span = row.querySelector(".found-text");
-          if (span) {
-            span.textContent = foundVal;
-            span.classList.remove("removed");
-            span.contentEditable = "false";
-          }
-
-          syncRowState(row, "original");
-        }
-      }
-    });
-    syncBulkBtns(card, idx);
-    updatePreview();
-  });
-
-  function updateSummary() {
-    const c = { verified: 0, updated: 0, needs_review: 0, not_found: 0 };
-    let dupes = 0;
-    results.forEach(r => {
-      c[r.status] = (c[r.status] || 0) + 1;
-      if (r.duplicate_of) dupes++;
-    });
-    $(".badge-verified").textContent = `Verified: ${c.verified}`;
-    $(".badge-updated").textContent = `Auto-Updated: ${c.updated}`;
-    $(".badge-review").textContent = `Needs Review: ${c.needs_review}`;
-    $(".badge-notfound").textContent = `Not Found: ${c.not_found}`;
-    $(".badge-duplicates").textContent = `Duplicates: ${dupes}`;
-    $$(".summary-badge").forEach(b => b.classList.add("active"));
-  }
-
-  // ─── Author truncation ────────────────────────────────────────────
-  function truncateAuthors(authorStr, max) {
-    if (!authorStr || max <= 0) return authorStr;
-    // BibTeX authors are separated by " and "
-    const authors = authorStr.split(/\s+and\s+/i);
-    if (authors.length <= max) return authorStr;
-    return authors.slice(0, max).join(" and ") + " and others";
-  }
-
-  function updateAuthorPills() {
-    const max = parseInt(optMaxAuthors.value) || 0;
-
-    // Update existing API author diff rows
-    $$('.diff-row[data-field="author"]:not([data-injected])').forEach(row => {
-      const foundVal = decodeURIComponent(row.getAttribute("data-found-val") || "");
-      const origVal = decodeURIComponent(row.getAttribute("data-original-val") || "");
-      const sugPill = row.querySelector(".pill-suggested");
-      if (sugPill && row.dataset.action !== "custom") {
-        const truncated = max > 0 ? truncateAuthors(foundVal, max) : foundVal;
-        sugPill.textContent = truncated;
-        if (truncated.trim() === origVal.trim()) {
-          row.classList.add("author-match-hidden");
-        } else {
-          row.classList.remove("author-match-hidden");
-        }
-      }
-    });
-
-    // Remove any previously injected rows
-    $$('.diff-row[data-injected]').forEach(row => {
-      const card = row.closest(".entry-card");
-      const idx = parseInt(row.dataset.entry);
-      row.remove();
-      // Clean up empty diff tables
-      if (card) {
-        const diffTable = card.querySelector(".diff-table:not(.fields-table)");
-        if (diffTable && diffTable.querySelectorAll(".diff-row").length === 0) {
-          diffTable.remove();
-        }
-        // Unhide plain author row
-        const plainRow = card.querySelector('.field-row-plain[data-field="author"]');
-        if (plainRow) plainRow.classList.remove("author-match-hidden");
-      }
-      // Clean up fieldEdits injected entry
-      if (fieldEdits[idx]?.author?._injected) {
-        delete fieldEdits[idx].author;
-      }
-    });
-
-    // For entries WITHOUT an existing author diff row, inject if truncation differs
-    if (max > 0) {
-      $$(".entry-card").forEach(card => {
-        const idx = parseInt(card.dataset.index);
-        const entry = parsedEntries[idx];
-        if (!entry || !entry.author) return;
-
-        const existingRow = card.querySelector('.diff-row[data-field="author"]:not(.field-row-plain)');
-        if (existingRow) return; // Already has an API diff row
-
-        const authorCount = entry.author.split(/\s+and\s+/i).length;
-        if (authorCount <= max) return;
-
-        const truncated = truncateAuthors(entry.author, max);
-        if (truncated.trim() === entry.author.trim()) return;
-
-        // Set fieldEdits for this entry
-        if (!fieldEdits[idx]) fieldEdits[idx] = {};
-        fieldEdits[idx].author = { action: "found", value: truncated, _injected: true };
-
-        // Find or create the diff table
-        let diffTable = card.querySelector(".diff-table:not(.fields-table)");
-        if (!diffTable) {
-          const tableHTML = `<table class="diff-table"><tr><th>Field</th><th>Your Value</th><th>Suggested</th><th></th></tr></table>`;
-          const insertAfter = card.querySelector(".review-hint") || card.querySelector(".not-found-hint") || card.querySelector(".entry-header");
-          insertAfter.insertAdjacentHTML("afterend", tableHTML);
-          diffTable = card.querySelector(".diff-table:not(.fields-table)");
-        }
-
-        const origAttr = encodeURIComponent(entry.author);
-        const foundAttr = encodeURIComponent(truncated);
-        const rowHTML = `<tr class="diff-row" data-entry="${idx}" data-field="author" data-action="found"
-          data-enrichment="" data-injected="1"
-          data-found-val="${foundAttr}"
-          data-original-val="${origAttr}">
-          <td class="field-name"><span class="field-name-pill">author</span></td>
-          <td class="val-col val-col-original">
-            <button class="choice-pill pill-original"
-                    data-entry="${idx}" data-field="author" data-action="original" data-val="${esc(entry.author)}"
-                    title="Keep your value">${esc(entry.author)}</button>
-          </td>
-          <td class="val-col val-col-suggested">
-            <span class="choice-pill pill-suggested active"
-                    contenteditable="true" spellcheck="false"
-                    data-entry="${idx}" data-field="author" data-action="found" data-val="${esc(truncated)}"
-                    title="Use suggested value (click to select, edit to customize)">${esc(truncated)}</span>
-          </td>
-          <td class="field-actions-mini">
-            <button class="fa-btn-x" title="Remove field"
-                    data-entry="${idx}" data-field="author" data-action="remove" data-val="">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </td>
-        </tr>`;
-        const headerRow = diffTable.querySelector("tr");
-        headerRow.insertAdjacentHTML("afterend", rowHTML);
-
-        // Also hide the author from "Other fields" if it exists there
-        const plainAuthorRow = card.querySelector('.field-row-plain[data-field="author"]');
-        if (plainAuthorRow) plainAuthorRow.classList.add("author-match-hidden");
-      });
+      const detailSlot = '<div class="entry-detail-slot" id="detail-slot-' + idx + '"></div>';
+      return headerHTML + dupHTML + revHTML + candidatesHTML + detailSlot;
     } else {
-      // max is 0 (All) — unhide any hidden plain author rows
-      $$('.field-row-plain[data-field="author"].author-match-hidden').forEach(row => {
-        row.classList.remove("author-match-hidden");
-      });
+      // Parsed / Verified / Not Found / Duplicate / Error: read-only original bib
+      const origBib = B.entriesToBib([entry]);
+      const bibReadonly = '<pre class="bib-readonly">' + esc(origBib) + '</pre>';
+      return headerHTML + dupHTML + errHTML + nfHTML + bibReadonly;
+    }
+  }
+
+  // ─── Four-view: render inside card ────────────────────────────────────
+  function buildFourViewHTML(idx) {
+    const r = results[idx];
+    const sourceLabel = r && r.found && r.found._source ? ' <span class="fv-source-badge">' + esc(r.found._source.toUpperCase()) + '</span>' : "";
+    const adoptBtn = '<button class="btn-adopt-found" data-entry="' + idx + '">' + esc(t("adopt_found")) + '</button>';
+    const iconDiff = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>';
+    return (
+      '<div class="fv-field-table-wrap"><table class="fv-field-table" id="fv-table-' + idx + '">' +
+        '<thead><tr>' +
+          '<th class="fv-col-field">Field</th>' +
+          '<th class="fv-col-orig">' + esc(t("view_original")) + '</th>' +
+          '<th class="fv-col-found">' + esc(t("view_found")) + sourceLabel + '</th>' +
+          '<th class="fv-col-edit">' + esc(t("view_edit")) + '</th>' +
+          '<th class="fv-col-act">' + adoptBtn + '</th>' +
+        '</tr></thead>' +
+        '<tbody id="fv-tbody-' + idx + '"></tbody>' +
+      '</table></div>' +
+      '<div class="fv-diff-wrap">' +
+        '<div class="fv-diff-header">' + iconDiff + '<span>' + esc(t("view_diff")) + '</span></div>' +
+        '<pre class="fv-diff-body" id="fv-diff-' + idx + '"></pre>' +
+      '</div>'
+    );
+  }
+
+  function renderDetailInCard(idx) {
+    const slot = document.getElementById("detail-slot-" + idx);
+    if (!slot) return;
+    const r = results[idx], entry = parsedEntries[idx];
+    if (!r || !entry) return;
+
+    if (!slot.querySelector(".detail-panel")) {
+      const panel = document.createElement("div");
+      panel.className = "detail-panel";
+      panel.innerHTML = buildFourViewHTML(idx);
+      slot.appendChild(panel);
     }
 
-    // Update card statuses
-    updateCardStatuses();
-  }
+    // Determine all fields to show: title + compared fields + any extra fields present in entry or found
+    const ALL_FIELDS = ["title"].concat(B.COMPARED_FIELDS);
+    const diffFieldSet = new Set((r.field_diffs || []).map(d => d.field));
+    const foundEntry = r.found || {};
+    const extraFields = Object.keys(foundEntry).filter(f =>
+      !ALL_FIELDS.includes(f) && !["ID","ENTRYTYPE","_source"].includes(f) && (foundEntry[f] || "").toString().trim()
+    );
+    const fields = ALL_FIELDS.concat(extraFields.filter(f => !ALL_FIELDS.includes(f)));
 
-  function updateCardStatuses() {
-    $$(".entry-card").forEach(card => {
-      const idx = parseInt(card.dataset.index);
-      const r = results[idx];
-      if (!r) return;
-      const origStatus = r.status;
-
-      // Store original status on the card if not already saved
-      if (!card.dataset.origStatus) card.dataset.origStatus = origStatus;
-      const savedStatus = card.dataset.origStatus;
-
-      // Check all non-plain diff rows (including injected ones)
-      const diffRows = card.querySelectorAll(".diff-row:not(.field-row-plain)");
-      const hasVisibleDiffs = diffRows.length > 0 && ![...diffRows].every(row => row.classList.contains("author-match-hidden"));
-      const hasInjectedRows = card.querySelector('.diff-row[data-injected]') !== null;
-
-      let effectiveStatus;
-      if (hasInjectedRows && hasVisibleDiffs && savedStatus === "verified") {
-        // Was verified but now has injected author truncation suggestion
-        effectiveStatus = "updated";
-      } else if (!hasVisibleDiffs && (savedStatus === "updated" || savedStatus === "needs_review")) {
-        // All diffs hidden — promote to verified
-        effectiveStatus = "verified";
-      } else {
-        effectiveStatus = savedStatus;
-      }
-
-      // Update card visuals
-      card.dataset.status = effectiveStatus;
-      card.className = card.className.replace(/status-\S+/, `status-${effectiveStatus}`);
-      const tag = card.querySelector(".status-tag:not(.tag-duplicate)");
-      if (tag) {
-        tag.className = `status-tag tag-${effectiveStatus}`;
-        tag.textContent = statusLabel(effectiveStatus);
-      }
-
-      // Hide/show the diff table and actions
-      const diffTable = card.querySelector(".diff-table:not(.fields-table)");
-      if (diffTable) diffTable.style.display = !hasVisibleDiffs && !hasInjectedRows ? "none" : "";
-      const actions = card.querySelector(".entry-actions");
-      if (actions) actions.style.display = !hasVisibleDiffs ? "none" : "";
-    });
-
-    // Recount summary
-    updateDynamicSummary();
-  }
-
-  function updateDynamicSummary() {
-    const c = { verified: 0, updated: 0, needs_review: 0, not_found: 0 };
-    let dupes = 0;
-    $$(".entry-card").forEach(card => {
-      const status = card.dataset.status;
-      c[status] = (c[status] || 0) + 1;
-      if (card.dataset.duplicate === "true") dupes++;
-    });
-    $(".badge-verified").textContent = `Verified: ${c.verified}`;
-    $(".badge-updated").textContent = `Auto-Updated: ${c.updated}`;
-    $(".badge-review").textContent = `Needs Review: ${c.needs_review}`;
-    $(".badge-notfound").textContent = `Not Found: ${c.not_found}`;
-    $(".badge-duplicates").textContent = `Duplicates: ${dupes}`;
-  }
-
-  // ─── Live preview ────────────────────────────────────────────────
-  function buildPreviewBib() {
-    const s = getSettings();
-    const count = results.length;
-    let final = parsedEntries.slice(0, count).map((entry, i) => {
-      const r = results[i];
-      if (!r) return { ...entry };
-      if (s.removeNotFound && r.status === "not_found") return null;
-
-      const out = { ...entry };
-      const edits = fieldEdits[i] || {};
-      for (const [field, fe] of Object.entries(edits)) {
-        if (!fe) continue;
-        if (fe.action === "found" || fe.action === "custom") {
-          if (fe.value) out[field] = fe.value;
-        } else if (fe.action === "remove") {
-          delete out[field];
+    // Initialise fieldEdits for every field we show
+    const defaultAction = r.status === "updated" ? "found" : "original";
+    for (const f of fields) {
+      if (!fieldEdits[idx][f]) {
+        const foundVal = (foundEntry[f] || "").toString();
+        const origVal  = (entry[f]   || "").toString();
+        if (diffFieldSet.has(f)) {
+          const d = r.field_diffs.find(x => x.field === f);
+          fieldEdits[idx][f] = { action: defaultAction, value: foundVal || origVal };
+          if (d) fieldEdits[idx][f].foundVal = d.found || "";
+        } else {
+          fieldEdits[idx][f] = { action: "original", value: origVal };
         }
       }
-
-      if (s.maxAuthors > 0 && out.author) {
-        out.author = truncateAuthors(out.author, s.maxAuthors);
-      }
-
-      if (s.preferPublished) {
-        const venue = (out.journal || out.booktitle || "").toLowerCase();
-        if (venue.includes("arxiv") || venue.includes("preprint") || venue.includes("corr")) {
-          const res = results[i];
-          if (res && res.suggested) {
-            const foundVenue = res.suggested.journal || res.suggested.booktitle || "";
-            const fvLower = foundVenue.toLowerCase();
-            if (foundVenue && !fvLower.includes("arxiv") && !fvLower.includes("preprint") && !fvLower.includes("corr")) {
-              if (out.journal) out.journal = foundVenue;
-              else if (out.booktitle) out.booktitle = foundVenue;
-            }
-          }
-        }
-      }
-      return out;
-    }).filter(Boolean);
-
-    if (s.removeDuplicates) {
-      const seen = new Set();
-      final = final.filter(entry => {
-        let key;
-        if (s.dedupBy === "doi") key = (entry.doi || "").toLowerCase().trim();
-        else if (s.dedupBy === "id") key = (entry.ID || "").toLowerCase().trim();
-        else key = B.normalizeTitle(entry.title || "");
-        if (!key) return true;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
     }
-    return B.entriesToBib(final);
+
+    populateFvTable(idx, fields, entry, foundEntry, r);
+    refreshDetailDiff(idx);
   }
 
-  let currentPreviewBib = "";
+  function populateFvTable(idx, fields, entry, foundEntry, r) {
+    const tbody = document.getElementById("fv-tbody-" + idx);
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    const xSvg = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    const diffFieldSet = new Set((r.field_diffs || []).map(d => d.field));
 
-  function diffLines(oldLines, newLines) {
-    const m = oldLines.length, n = newLines.length;
-    const dp = Array.from({ length: m + 1 }, () => new Uint16Array(n + 1));
-    for (let i = 1; i <= m; i++)
-      for (let j = 1; j <= n; j++)
-        dp[i][j] = oldLines[i - 1] === newLines[j - 1]
-          ? dp[i - 1][j - 1] + 1
-          : Math.max(dp[i - 1][j], dp[i][j - 1]);
+    for (const f of fields) {
+      const origVal  = (entry[f]      || "").toString();
+      const foundVal = (foundEntry[f] || "").toString();
+      const fe       = fieldEdits[idx][f] || { action: "original", value: origVal };
+      const hasDiff  = diffFieldSet.has(f) || (origVal !== foundVal && (origVal || foundVal));
+      const isNew    = !origVal && foundVal;   // enrichment: field only in found
 
-    const result = [];
-    let i = m, j = n;
-    while (i > 0 || j > 0) {
-      if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-        result.push({ type: "ctx", text: newLines[j - 1] });
-        i--; j--;
-      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-        result.push({ type: "add", text: newLines[j - 1] });
-        j--;
+      const tr = document.createElement("tr");
+      tr.className = "fv-row" + (hasDiff ? " fv-row-diff" : "");
+      tr.dataset.entry = idx;
+      tr.dataset.field = f;
+
+      // Field name cell
+      const tdField = document.createElement("td");
+      tdField.className = "fv-col-field";
+      tdField.innerHTML = '<span class="fv-field-name">' + esc(f) + (isNew ? ' <span class="fv-badge-new">+</span>' : "") + '</span>';
+
+      // Original cell
+      const tdOrig = document.createElement("td");
+      tdOrig.className = "fv-col-orig";
+      tdOrig.innerHTML = origVal
+        ? '<span class="fv-cell-val' + (hasDiff && !isNew ? " fv-val-changed" : "") + '">' + esc(origVal) + '</span>'
+        : '<span class="fv-cell-empty">—</span>';
+
+      // Found cell (clickable to adopt into edit)
+      const tdFound = document.createElement("td");
+      tdFound.className = "fv-col-found";
+      if (foundVal) {
+        tdFound.innerHTML = '<button class="fv-adopt-cell' + (hasDiff ? " fv-val-found-diff" : "") + '" data-entry="' + idx + '" data-field="' + escAttr(f) + '" data-val="' + escAttr(foundVal) + '" title="Use this value">' + esc(foundVal) + '</button>';
       } else {
-        result.push({ type: "del", text: oldLines[i - 1] });
-        i--;
+        tdFound.innerHTML = '<span class="fv-cell-empty">—</span>';
       }
+
+      // Edit cell (contenteditable)
+      const editVal = fe.action === "remove" ? "" : (fe.action === "found" ? foundVal : (fe.action === "original" ? origVal : fe.value));
+      const tdEdit = document.createElement("td");
+      tdEdit.className = "fv-col-edit";
+      tdEdit.innerHTML = '<span class="fv-edit-cell' + (fe.action === "remove" ? " fv-removed" : "") + '" contenteditable="' + (fe.action === "remove" ? "false" : "true") + '" spellcheck="false" data-entry="' + idx + '" data-field="' + escAttr(f) + '">' + esc(editVal) + '</span>';
+
+      // Actions cell
+      const tdAct = document.createElement("td");
+      tdAct.className = "fv-col-act";
+      tdAct.innerHTML = '<button class="fv-btn-remove' + (fe.action === "remove" ? " active" : "") + '" data-entry="' + idx + '" data-field="' + escAttr(f) + '" title="' + (isNew ? "Don\'t add" : "Remove field") + '">' + xSvg + '</button>';
+
+      tr.append(tdField, tdOrig, tdFound, tdEdit, tdAct);
+      tbody.appendChild(tr);
     }
-    return result.reverse();
   }
 
-  function buildOriginalBib() {
-    return B.entriesToBib(parsedEntries.slice(0, results.length));
+  function refreshFvTable(idx) {
+    const r = results[idx], entry = parsedEntries[idx];
+    if (!r || !entry) return;
+    const ALL_FIELDS = ["title"].concat(B.COMPARED_FIELDS);
+    const foundEntry = r.found || {};
+    const extraFields = Object.keys(foundEntry).filter(f =>
+      !ALL_FIELDS.includes(f) && !["ID","ENTRYTYPE","_source"].includes(f) && (foundEntry[f] || "").toString().trim()
+    );
+    const fields = ALL_FIELDS.concat(extraFields.filter(f => !ALL_FIELDS.includes(f)));
+    populateFvTable(idx, fields, entry, foundEntry, r);
   }
 
-  function renderDiff(oldBib, newBib) {
-    const oldLines = oldBib.split("\n");
-    const newLines = newBib.split("\n");
-    const ops = diffLines(oldLines, newLines);
-    const hasChanges = ops.some(o => o.type !== "ctx");
+  function closeDetailInCard(idx) {
+    const slot = document.getElementById("detail-slot-" + idx);
+    if (slot) slot.innerHTML = "";
+    if (currentDetailIdx === idx) currentDetailIdx = -1;
+  }
 
-    if (!hasChanges) {
-      return ops.map(o => {
-        const entryMatch = o.text.match(/^@\w+\{(.+),\s*$/);
-        const idAttr = entryMatch ? ` data-entry-id="${esc(entryMatch[1])}"` : "";
-        return `<span class="diff-line diff-ctx"${idAttr}>${esc(o.text)}</span>`;
-      }).join("");
+  // Close button inside four-view (event delegation)
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".btn-close-detail");
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.entry);
+    if (!isNaN(idx)) closeDetailInCard(idx);
+  });
+
+  // Adopt found button (header — set all fields to found)
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".btn-adopt-found");
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.entry);
+    if (isNaN(idx)) return;
+    const r = results[idx];
+    if (!r || !r.found) return;
+    const foundEntry = r.found;
+    const ALL_FIELDS = ["title"].concat(B.COMPARED_FIELDS);
+    for (const f of ALL_FIELDS) {
+      const foundVal = (foundEntry[f] || "").toString();
+      if (foundVal) fieldEdits[idx][f] = { action: "found", value: foundVal };
     }
+    refreshFvTable(idx);
+    refreshDetailDiff(idx);
+  });
 
+  // Click found-cell value → adopt that single field into edit
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".fv-adopt-cell");
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.entry), field = btn.dataset.field, val = btn.dataset.val;
+    if (isNaN(idx)) return;
+    if (!fieldEdits[idx]) fieldEdits[idx] = {};
+    fieldEdits[idx][field] = { action: "found", value: val };
+    const row = btn.closest(".fv-row");
+    const editCell = row?.querySelector(".fv-edit-cell");
+    if (editCell) { editCell.textContent = val; editCell.classList.remove("fv-removed"); editCell.contentEditable = "true"; }
+    const removeBtn = row?.querySelector(".fv-btn-remove");
+    if (removeBtn) removeBtn.classList.remove("active");
+    flashRow(row);
+    refreshDetailDiff(idx);
+  });
+
+  // Edit-cell input → custom value
+  document.addEventListener("input", e => {
+    const cell = e.target.closest(".fv-edit-cell[contenteditable]");
+    if (!cell) return;
+    const idx = parseInt(cell.dataset.entry), field = cell.dataset.field;
+    if (!fieldEdits[idx]) fieldEdits[idx] = {};
+    fieldEdits[idx][field] = { action: "custom", value: cell.textContent };
+    refreshDetailDiff(idx);
+  });
+
+  // Remove / restore field button
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".fv-btn-remove");
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.entry), field = btn.dataset.field;
+    if (isNaN(idx)) return;
+    if (!fieldEdits[idx]) fieldEdits[idx] = {};
+    const fe = fieldEdits[idx][field] || {};
+    const row = btn.closest(".fv-row");
+    const editCell = row?.querySelector(".fv-edit-cell");
+    if (fe.action === "remove") {
+      // restore
+      const r = results[idx], entry = parsedEntries[idx];
+      const origVal = (entry?.[field] || "").toString();
+      const foundVal = ((r?.found || {})[field] || "").toString();
+      const restoreVal = (r?.status === "updated" && foundVal) ? foundVal : origVal;
+      fieldEdits[idx][field] = { action: r?.status === "updated" ? "found" : "original", value: restoreVal };
+      if (editCell) { editCell.textContent = restoreVal; editCell.classList.remove("fv-removed"); editCell.contentEditable = "true"; }
+      btn.classList.remove("active");
+    } else {
+      fieldEdits[idx][field] = { action: "remove", value: "", _savedValue: fe.value || "" };
+      if (editCell) { editCell.textContent = ""; editCell.classList.add("fv-removed"); editCell.contentEditable = "false"; }
+      btn.classList.add("active");
+    }
+    flashRow(row);
+    refreshDetailDiff(idx);
+  });
+
+  function buildEditEntry(idx, entry) {
+    const editEntry = { ...entry };
+    const edits = fieldEdits[idx] || {};
+    for (const [f, fe] of Object.entries(edits)) {
+      if (!fe) continue;
+      if (fe.action === "found" || fe.action === "custom") { if (fe.value) editEntry[f] = fe.value; else delete editEntry[f]; }
+      else if (fe.action === "remove") delete editEntry[f];
+    }
+    return editEntry;
+  }
+
+  function renderDiffText(oldBib, newBib) {
+    const oldL = oldBib.split("\n"), newL = newBib.split("\n");
+    const ops = diffLines(oldL, newL);
     return ops.map(o => {
       const cls = o.type === "add" ? "diff-add" : o.type === "del" ? "diff-del" : "diff-ctx";
-      const entryMatch = o.text.match(/^@\w+\{(.+),\s*$/);
-      const idAttr = entryMatch ? ` data-entry-id="${esc(entryMatch[1])}"` : "";
-      return `<span class="diff-line ${cls}"${idAttr}>${esc(o.text)}</span>`;
+      return '<span class="diff-line ' + cls + '">' + esc(o.text) + '</span>';
     }).join("");
   }
 
-  function updatePreview() {
-    if (!parsedEntries.length) return;
-    currentPreviewBib = buildPreviewBib();
-    const origBib = buildOriginalBib();
-    previewPlaceholder.style.display = "none";
-    previewCode.style.display = "block";
-    previewCode.innerHTML = renderDiff(origBib, currentPreviewBib);
+  function refreshDetailDiff(idx) {
+    const entry = parsedEntries[idx];
+    if (!entry) return;
+    const origBib = B.entriesToBib([entry]);
+    const editBib = B.entriesToBib([buildEditEntry(idx, entry)]);
+    const elDiff = document.getElementById("fv-diff-" + idx);
+    if (elDiff) elDiff.innerHTML = renderDiffText(origBib, editBib);
   }
 
-  const btnCopy = $("#btn-copy-preview");
-  btnCopy.addEventListener("click", () => {
-    if (!currentPreviewBib) return;
-    navigator.clipboard.writeText(currentPreviewBib).then(() => {
-      btnCopy.classList.add("copied");
-      const origHTML = btnCopy.innerHTML;
-      btnCopy.innerHTML = origHTML.replace("Copy", "Copied!");
-      setTimeout(() => {
-        btnCopy.classList.remove("copied");
-        btnCopy.innerHTML = origHTML;
-      }, 1500);
-    });
+  function flashRow(row) { if (!row) return; row.classList.remove("flash"); void row.offsetWidth; row.classList.add("flash"); }
+
+  // ─── Candidates: more/less toggle ─────────────────────────────────────
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".candidates-more-btn");
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.entry);
+    const extra = btn.nextElementSibling;
+    if (!extra) return;
+    const isExpanded = extra.classList.toggle("visible");
+    btn.classList.toggle("expanded", isExpanded);
+    const rest = (results[idx]?.candidates || []).slice(3).length;
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>' + rest + ' ' + (isExpanded ? t("candidates_less") : t("candidates_more"));
   });
 
-  // ─── Filtering ────────────────────────────────────────────────────
-  document.addEventListener("click", (e) => {
-    const badge = e.target.closest(".summary-badge");
-    if (!badge) return;
+  // ─── Candidates: click to switch ──────────────────────────────────────
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".candidate-item");
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.entry), ci = parseInt(btn.dataset.candidate);
+    const r = results[idx];
+    if (!r || !r.candidates || !r.candidates[ci]) return;
+    r.selectedCandidateIdx = ci;
+    fieldEdits[idx] = {};
+    applyCandidate(r, parsedEntries[idx], r.candidates[ci]);
+    // update in-place: no remove+append so position is preserved
+    const card = document.getElementById("card-" + idx);
+    if (card) {
+      card.className = "entry-card status-" + r.status;
+      card.dataset.status = r.status;
+      card.innerHTML = buildCardHTML(r);
+      applyFilterToCard(card, r);
+      renderDetailInCard(idx);
+    }
+    rebuildToc();
+  });
+
+  // ─── Summary ───────────────────────────────────────────────────────────
+  function updateSummary() {
+    const c = { parsed: 0, verified: 0, updated: 0, needs_review: 0, not_found: 0, error: 0 };
+    let dupes = 0;
+    results.forEach(r => { c[r.status] = (c[r.status] || 0) + 1; if (r.duplicate_of) dupes++; });
+    const b = (sel, txt) => { const el = $(sel); if (el) el.textContent = txt; };
+    b(".badge-parsed",     t("badge_parsed")     + ": " + c.parsed);
+    b(".badge-verified",   t("badge_verified")   + ": " + c.verified);
+    b(".badge-updated",    t("badge_updated")    + ": " + c.updated);
+    b(".badge-review",     t("badge_review")     + ": " + c.needs_review);
+    b(".badge-notfound",   t("badge_notfound")   + ": " + c.not_found);
+    b(".badge-duplicates", t("badge_duplicates") + ": " + dupes);
+    b(".badge-error",      t("badge_error")      + ": " + c.error);
+    $$(".summary-badge").forEach(b => b.classList.add("active"));
+  }
+
+  // ─── LCS diff ──────────────────────────────────────────────────────────
+  function diffLines(oldL, newL) {
+    const m = oldL.length, n = newL.length;
+    const dp = Array.from({ length: m + 1 }, () => new Uint16Array(n + 1));
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) dp[i][j] = oldL[i-1] === newL[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+    const result = []; let i = m, j = n;
+    while (i > 0 || j > 0) { if (i > 0 && j > 0 && oldL[i-1] === newL[j-1]) { result.push({ type: "ctx", text: newL[j-1] }); i--; j--; } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { result.push({ type: "add", text: newL[j-1] }); j--; } else { result.push({ type: "del", text: oldL[i-1] }); i--; } }
+    return result.reverse();
+  }
+
+  // ─── Filtering ─────────────────────────────────────────────────────────
+  document.addEventListener("click", e => {
+    const badge = e.target.closest(".summary-badge"); if (!badge) return;
     const filter = badge.dataset.filter;
     activeFilter = activeFilter === filter ? "all" : filter;
-    $$(".summary-badge").forEach(b =>
-      b.classList.toggle("active", activeFilter === "all" || b.dataset.filter === activeFilter));
-    $$(".entry-card").forEach(card => {
-      if (activeFilter === "all") { card.classList.remove("hidden"); return; }
-      if (activeFilter === "duplicate") {
-        card.classList.toggle("hidden", card.dataset.duplicate !== "true");
-      } else {
-        card.classList.toggle("hidden", card.dataset.status !== activeFilter);
-      }
-    });
+    $$(".summary-badge").forEach(b => b.classList.toggle("active", activeFilter === "all" || b.dataset.filter === activeFilter));
+    applyCurrentFilter();
+    rebuildToc();
   });
 
-  // ─── Settings popover ────────────────────────────────────────────
-  const settingsToggle = $("#settings-toggle");
-  const settingsPopover = $("#settings-popover");
-  const optRemoveDuplicates = $("#opt-remove-duplicates");
-  const optRemoveNotFound = $("#opt-remove-notfound");
-  const optMaxAuthors = $("#opt-max-authors");
-  const optPreferPublished = $("#opt-prefer-published");
-  const dedupCriteriaWrap = $("#dedup-criteria-wrap");
+  // ─── Settings popover ──────────────────────────────────────────────────
+  const settingsToggle = $("#settings-toggle"), settingsPopover = $("#settings-popover");
+  settingsToggle.addEventListener("click", e => { e.stopPropagation(); const isOpen = settingsPopover.classList.toggle("open"); settingsToggle.classList.toggle("active", isOpen); });
+  document.addEventListener("click", e => { if (!settingsPopover.contains(e.target) && e.target !== settingsToggle) { settingsPopover.classList.remove("open"); settingsToggle.classList.remove("active"); } });
 
-  settingsToggle.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const isOpen = settingsPopover.classList.toggle("open");
-    settingsToggle.classList.toggle("active", isOpen);
-  });
+  // ─── Activity log toggle ───────────────────────────────────────────────
+  const logToggle = $("#activity-log-toggle");
+  if (logToggle) logToggle.addEventListener("click", () => { const al = $("#activity-log"); if (al) al.classList.toggle("expanded"); logToggle.setAttribute("aria-expanded", al?.classList.contains("expanded") ? "true" : "false"); });
+  const logClear = $("#activity-log-clear");
+  if (logClear) logClear.addEventListener("click", () => { if (activityLogLines) activityLogLines.innerHTML = ""; logCount = 0; if (activityLogCount) activityLogCount.textContent = "0 " + t("log_events"); });
 
-  document.addEventListener("click", (e) => {
-    if (!settingsPopover.contains(e.target) && e.target !== settingsToggle) {
-      settingsPopover.classList.remove("open");
-      settingsToggle.classList.remove("active");
-    }
-  });
-
-  optRemoveDuplicates.addEventListener("change", () => {
-    dedupCriteriaWrap.classList.toggle("visible", optRemoveDuplicates.checked);
-    updatePreview();
-  });
-
-  [optRemoveNotFound, optPreferPublished].forEach(el =>
-    el.addEventListener("change", updatePreview));
-  optMaxAuthors.addEventListener("change", () => {
-    updateAuthorPills();
-    updatePreview();
-  });
-  $$('input[name="dedup-criteria"]').forEach(el =>
-    el.addEventListener("change", updatePreview));
-
-  function getSettings() {
-    return {
-      removeDuplicates: optRemoveDuplicates.checked,
-      dedupBy: (document.querySelector('input[name="dedup-criteria"]:checked') || {}).value || "title",
-      removeNotFound: optRemoveNotFound.checked,
-      maxAuthors: parseInt(optMaxAuthors.value) || 0,
-      preferPublished: optPreferPublished.checked,
-    };
+  // ─── Download ──────────────────────────────────────────────────────────
+  function buildExportBib() {
+    return B.entriesToBib(parsedEntries.slice(0, results.length).map((entry, i) => {
+      const r = results[i]; if (!r) return { ...entry };
+      return buildEditEntry(i, entry);
+    }).filter(Boolean));
   }
-
-  // ─── Download ─────────────────────────────────────────────────────
   btnDownload.addEventListener("click", () => {
-    const bibContent = currentPreviewBib || buildPreviewBib();
+    const bibContent = buildExportBib();
     const blob = new Blob([bibContent], { type: "application/x-bibtex" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "verified_refs.bib";
-    a.click();
+    const a = document.createElement("a"); a.href = url; a.download = "verified_refs.bib"; a.click();
     URL.revokeObjectURL(url);
   });
 
-  function esc(str) {
-    const d = document.createElement("div");
-    d.textContent = str;
-    return d.innerHTML;
+  // ─── Helpers ───────────────────────────────────────────────────────────
+  function esc(str) { const d = document.createElement("div"); d.textContent = str; return d.innerHTML; }
+  function escAttr(str) {
+    return String(str ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
+
+  // ─── Init ──────────────────────────────────────────────────────────────
+  _appReady = true;
+  applyLang();
 })();
