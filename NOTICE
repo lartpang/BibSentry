@@ -1,0 +1,19 @@
+BibTeX Verifier Notice
+
+This project is a fork of the original BibTeX Verifier project:
+
+  Original project: https://github.com/merfanian/Bibtex-Verifier
+  Original copyright: Copyright (c) 2026 Mahdi
+  Original license: MIT License
+
+The original MIT license text and copyright notice are preserved in LICENSE.
+
+This fork is maintained at:
+
+  Fork repository: https://github.com/lartpang/Bibtex-Verifier
+  Live site: https://lartpang.github.io/Bibtex-Verifier/
+
+This fork includes additional changes by lartpang, including expanded parsing,
+tiered multi-source verification, candidate ranking, bilingual UI, parsed-first
+workflow, activity logging, pause/resume controls, four-view field editing,
+right-side navigation, privacy disclosure updates, and export workflow changes.

@@ -4,13 +4,15 @@ BibTeX Verifier is a browser-based bibliography verification tool. It parses a `
 
 The app is published as a static GitHub Pages site from `docs/`. There is no backend. BibTeX parsing, review, editing, and export happen in the browser; lookup requests go directly from your browser to the sources you enable.
 
-[Live app](https://lartpang.github.io/Bibtex-Verifier/) | [MIT License](LICENSE)
+[Live app](https://lartpang.github.io/Bibtex-Verifier/) | [MIT License](LICENSE) | [Notice](NOTICE)
 
 ## Acknowledgement And Inspiration
 
 This project builds on the original [merfanian/Bibtex-Verifier](https://github.com/merfanian/Bibtex-Verifier). The original project provided the browser-based BibTeX verification foundation, including the static GitHub Pages app, BibTeX parsing workflow, CrossRef/Semantic Scholar checks, result cards, and export-oriented review flow.
 
 This fork keeps that core idea and extends it substantially in both verification capability and interaction design. The current version adds a stricter parser, tiered multi-source lookup, candidate ranking, bilingual UI, parsed-first verification, activity logging, pause/resume control, four-view field editing, right-side navigation, more explicit privacy controls, and a reviewed export workflow.
+
+The original MIT license and copyright notice are preserved in [LICENSE](LICENSE). Additional attribution and fork-maintenance notes are recorded in [NOTICE](NOTICE).
 
 ## Highlights
 
