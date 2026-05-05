@@ -978,7 +978,13 @@
 
   // ─── Settings popover ──────────────────────────────────────────────────
   const settingsToggle = $("#settings-toggle"), settingsPopover = $("#settings-popover");
-  settingsToggle.addEventListener("click", e => { e.stopPropagation(); const isOpen = settingsPopover.classList.toggle("open"); settingsToggle.classList.toggle("active", isOpen); });
+  const floatingHelp = $("#floating-help");
+  settingsToggle.addEventListener("click", e => { e.stopPropagation(); if (floatingHelp) floatingHelp.open = false; const isOpen = settingsPopover.classList.toggle("open"); settingsToggle.classList.toggle("active", isOpen); });
+  if (floatingHelp) floatingHelp.addEventListener("toggle", () => {
+    if (!floatingHelp.open) return;
+    settingsPopover.classList.remove("open");
+    settingsToggle.classList.remove("active");
+  });
   document.addEventListener("click", e => { if (!settingsPopover.contains(e.target) && e.target !== settingsToggle) { settingsPopover.classList.remove("open"); settingsToggle.classList.remove("active"); } });
 
   // ─── Activity log toggle ───────────────────────────────────────────────
