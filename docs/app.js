@@ -13,11 +13,11 @@
       paste_placeholder: "Paste your BibTeX content here, e.g. from Overleaf...\n\n@article{example2024,\n  title={Your Paper Title},\n  author={Author, First and Author, Second},\n  year={2024},\n  journal={Some Journal}\n}",
       start_verification: "Start verification", pause: "Pause", resume: "Continue",
       download: "Download Corrected .bib",
-      badge_parsed: "Parsed", badge_verified: "Verified", badge_updated: "Auto-Updated",
-      badge_review: "Needs Review", badge_notfound: "Not Found",
+      badge_parsed: "Parsed", badge_verified: "Verified", badge_updated: "Needs Update",
+      badge_review: "Needs Update", badge_notfound: "Not Found",
       badge_duplicates: "Duplicates", badge_error: "Error",
-      status_parsed: "Parsed", status_verified: "Verified", status_updated: "Auto-Updated",
-      status_needs_review: "Needs Review", status_not_found: "Not Found",
+      status_parsed: "Parsed", status_verified: "Verified", status_updated: "Needs Update",
+      status_needs_review: "Needs Update", status_needs_update: "Needs Update", status_not_found: "Not Found",
       status_error: "Error", status_duplicate: "Duplicate",
       view_original: "Original", view_found: "Found", view_edit: "Edit", view_diff: "Diff",
       adopt_found: "Adopt all found values", close: "×",
@@ -58,11 +58,11 @@
       paste_placeholder: "在此粘贴 BibTeX 内容，例如来自 Overleaf...\n\n@article{example2024,\n  title={Your Paper Title},\n  author={Author, First and Author, Second},\n  year={2024},\n  journal={Some Journal}\n}",
       start_verification: "开始验证", pause: "暂停", resume: "继续",
       download: "下载修正后的 .bib",
-      badge_parsed: "已解析", badge_verified: "已验证", badge_updated: "自动更新",
-      badge_review: "待审核", badge_notfound: "未找到",
+      badge_parsed: "已解析", badge_verified: "已验证", badge_updated: "需要更新",
+      badge_review: "需要更新", badge_notfound: "未找到",
       badge_duplicates: "重复", badge_error: "错误",
-      status_parsed: "已解析", status_verified: "已验证", status_updated: "自动更新",
-      status_needs_review: "待审核", status_not_found: "未找到",
+      status_parsed: "已解析", status_verified: "已验证", status_updated: "需要更新",
+      status_needs_review: "需要更新", status_needs_update: "需要更新", status_not_found: "未找到",
       status_error: "错误", status_duplicate: "重复",
       view_original: "原始内容", view_found: "检索结果", view_edit: "编辑区", view_diff: "差异对比",
       adopt_found: "采用所有检索结果", close: "×",
@@ -151,11 +151,12 @@
     renderApiKeyOptions();
     const tocTitleEl = document.getElementById("toc-title");
     if (tocTitleEl) tocTitleEl.textContent = t("toc_title");
-    if (_appReady && results.length) { entryList.innerHTML = ""; results.forEach(r => renderEntryCard(r)); applyCurrentFilter(); rebuildToc(); }
+    if (_appReady && results.length) { entryList.innerHTML = ""; cardOrder.forEach(idx => results[idx] && renderEntryCard(results[idx])); applyCurrentFilter(); rebuildToc(); }
   }
 
   // ─── UI State ─────────────────────────────────────────────────────────
-  let parsedEntries = [], parseDiags = [], results = [], decisions = {}, fieldEdits = {};
+  let parsedEntries = [], parseDiags = [], results = [], decisions = {}, fieldEdits = {}, cardOrder = [];
+  let expandedCards = new Set(), openedCards = new Set();
   let activeFilter = "all", vState = "idle", currentDetailIdx = -1, resolveWait = null;
   const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
   const uploadZone = $(".upload-zone"), fileInput = $("#file-input"), resultsSection = $(".results-section");
@@ -164,6 +165,17 @@
   const btnStartVerify = $("#btn-start-verification"), btnDownload = $("#btn-download");
   const searchEngineOptions = $("#search-engine-options");
   const activityLogLines = $("#activity-log-lines"), activityLogCount = $("#activity-log-count");
+
+  function isNeedsUpdateStatus(status) {
+    return status === "needs_update" || status === "updated" || status === "needs_review";
+  }
+
+  function filterMatchesResult(r, filter) {
+    if (filter === "all") return true;
+    if (filter === "duplicate") return !!r.duplicate_of;
+    if (filter === "needs_update") return isNeedsUpdateStatus(r.status);
+    return r.status === filter;
+  }
 
   // ─── TOC sidebar ───────────────────────────────────────────────────────
   const tocSidebar  = $("#toc-sidebar");
@@ -176,11 +188,7 @@
   function rebuildToc() {
     if (!tocBody) return;
     // collect visible entries
-    const items = results.filter(r => {
-      if (activeFilter === "all") return true;
-      if (activeFilter === "duplicate") return !!r.duplicate_of;
-      return r.status === activeFilter;
-    });
+    const items = cardOrder.map(idx => results[idx]).filter(r => r && filterMatchesResult(r, activeFilter));
     tocBody.innerHTML = "";
     if (!items.length) { hideToc(); return; }
     items.forEach((r, i) => {
@@ -405,7 +413,7 @@
 
   // ─── Parse & Show ──────────────────────────────────────────────────────
   function parseAndShow(content) {
-    results = []; decisions = {}; fieldEdits = {}; activeFilter = "all"; vState = "idle";
+    results = []; decisions = {}; fieldEdits = {}; cardOrder = []; expandedCards = new Set(); openedCards = new Set(); activeFilter = "all"; vState = "idle";
     currentDetailIdx = -1;
     entryList.innerHTML = ""; logCount = 0;
     if (activityLogLines) activityLogLines.innerHTML = "";
@@ -431,11 +439,13 @@
       else if (dupOf) status = "duplicate";
       results.push({
         index: i, entry_id: entryId, entry_type: entry.ENTRYTYPE || "", title, status,
-        title_score: 0, field_diffs: [], suggested: {}, found_title: "", duplicate_of: dupOf,
+        title_score: 0, field_diffs: [], suggested: {}, found_title: "", update_kind: "",
+        duplicate_of: dupOf,
         found: null, candidates: [], selectedCandidateIdx: 0
       });
     }
-    results.forEach(r => renderEntryCard(r));
+    cardOrder = results.map(r => r.index);
+    cardOrder.forEach(idx => renderEntryCard(results[idx]));
     updateSummary(); rebuildToc();
     btnStartVerify.classList.remove("hidden"); btnStartVerify.textContent = t("start_verification");
     btnDownload.classList.add("hidden");
@@ -479,7 +489,7 @@
       } else {
         applyCandidate(r, entry, found);
       }
-      replaceCard(i); updateSummary(); rebuildToc();
+      replaceCard(i, { appendToEnd: isNeedsUpdateStatus(r.status) }); updateSummary(); rebuildToc();
     }
     vState = "done"; barProgressFill.classList.add("done");
     barProgressText.textContent = t("done") + " — " + total + " " + t("entries_verified");
@@ -492,7 +502,9 @@
     const cmp = B.compareEntry(entry, found);
     let fd = cmp.field_diffs;
     if (cmp.status === "needs_review" && found) fd = B.fieldDiffsForNeedsReview(entry, found);
-    r.status = cmp.status; r.title_score = cmp.title_score; r.field_diffs = fd;
+    r.update_kind = isNeedsUpdateStatus(cmp.status) ? cmp.status : "";
+    r.status = isNeedsUpdateStatus(cmp.status) ? "needs_update" : cmp.status;
+    r.title_score = cmp.title_score; r.field_diffs = fd;
     r.suggested = cmp.suggested; r.found_title = found.title || ""; r.found = found;
   }
 
@@ -523,55 +535,68 @@
 
   function statusLabel(s) {
     const map = { parsed:"status_parsed", verified:"status_verified", updated:"status_updated",
-      needs_review:"status_needs_review", not_found:"status_not_found", error:"status_error", duplicate:"status_duplicate" };
+      needs_review:"status_needs_review", needs_update:"status_needs_update", not_found:"status_not_found", error:"status_error", duplicate:"status_duplicate" };
     return t(map[s] || "status_parsed");
   }
 
   // ─── Card rendering ────────────────────────────────────────────────────
-  function renderEntryCard(r) {
+  function buildCardElement(r) {
     const card = document.createElement("div");
-    card.id = "card-" + r.index; card.className = "entry-card status-" + r.status;
+    const expanded = expandedCards.has(r.index);
+    card.id = "card-" + r.index;
+    const opened = openedCards.has(r.index);
+    card.className = "entry-card status-" + r.status + (expanded ? " expanded" : " collapsed") + (opened ? " opened-once" : " unopened");
     card.dataset.status = r.status; card.dataset.index = r.index;
     if (r.duplicate_of) card.dataset.duplicate = "true";
     card.innerHTML = buildCardHTML(r);
+    const header = card.querySelector(".entry-header");
+    if (header) header.setAttribute("aria-expanded", expanded ? "true" : "false");
     applyFilterToCard(card, r);
-    entryList.appendChild(card);
-    if (r.status === "updated" || r.status === "needs_review") renderDetailInCard(r.index);
+    return card;
   }
 
-  function replaceCard(idx) {
-    const old = document.getElementById("card-" + idx);
-    if (old) old.remove();
-    const r = results[idx], card = document.createElement("div");
-    card.id = "card-" + idx; card.className = "entry-card status-" + r.status;
-    card.dataset.status = r.status; card.dataset.index = r.index;
-    if (r.duplicate_of) card.dataset.duplicate = "true";
-    card.innerHTML = buildCardHTML(r);
-    applyFilterToCard(card, r);
+  function hydrateExpandedCard(r) {
+    if (expandedCards.has(r.index) && isNeedsUpdateStatus(r.status)) renderDetailInCard(r.index);
+  }
+
+  function renderEntryCard(r) {
+    const card = buildCardElement(r);
     entryList.appendChild(card);
-    if (r.status === "updated" || r.status === "needs_review") renderDetailInCard(idx);
+    hydrateExpandedCard(r);
+  }
+
+  function replaceCard(idx, opts = {}) {
+    const old = document.getElementById("card-" + idx);
+    const r = results[idx], card = buildCardElement(r);
+    if (opts.appendToEnd) {
+      cardOrder = cardOrder.filter(i => i !== idx);
+      cardOrder.push(idx);
+      if (old) old.remove();
+      entryList.appendChild(card);
+    } else if (old) {
+      old.replaceWith(card);
+    } else {
+      if (!cardOrder.includes(idx)) cardOrder.push(idx);
+      entryList.appendChild(card);
+    }
+    hydrateExpandedCard(r);
   }
 
   function applyFilterToCard(card, r) {
-    if (activeFilter !== "all") {
-      if (activeFilter === "duplicate") { if (!r.duplicate_of) card.classList.add("hidden"); }
-      else if (card.dataset.status !== activeFilter) card.classList.add("hidden");
-    }
+    card.classList.toggle("hidden", !filterMatchesResult(r, activeFilter));
   }
 
   function applyCurrentFilter() {
     $$(".entry-card").forEach(card => {
       const r = results[parseInt(card.dataset.index)];
       if (!r) return;
-      if (activeFilter === "all") { card.classList.remove("hidden"); return; }
-      if (activeFilter === "duplicate") card.classList.toggle("hidden", !r.duplicate_of);
-      else card.classList.toggle("hidden", card.dataset.status !== activeFilter);
+      card.classList.toggle("hidden", !filterMatchesResult(r, activeFilter));
     });
   }
 
   function buildDiffRow(d, idx, r) {
     const isEn = !(d.original || "").trim();
-    const da = r.status === "updated" ? "found" : "original";
+    const da = r.update_kind === "updated" ? "found" : "original";
     if (!fieldEdits[idx][d.field]) fieldEdits[idx][d.field] = { action: da, value: d.found || "" };
     const fe = fieldEdits[idx][d.field], ca = fe.action;
     const st = ca === "custom" ? (fe.value || "") : (d.found || "");
@@ -580,7 +605,7 @@
     let origCell = !isEn
       ? '<button class="choice-pill pill-original ' + (ca === "original" ? "active" : "") + '" data-entry="' + idx + '" data-field="' + escAttr(d.field) + '" data-action="original" data-val="' + escAttr(d.original || "") + '">' + esc(d.original) + '</button>'
       : '<span class="empty-val">—</span>';
-    let sugCell = (r.status === "updated" || r.status === "needs_review")
+    let sugCell = isNeedsUpdateStatus(r.status)
       ? '<span class="choice-pill pill-suggested ' + (ca === "found" || ca === "custom" ? "active" : "") + ' ' + (ca === "remove" ? "removed" : "") + '" contenteditable="' + (ca === "remove" ? "false" : "true") + '" spellcheck="false" data-entry="' + idx + '" data-field="' + escAttr(d.field) + '" data-action="found" data-val="' + escAttr(d.found || "") + '">' + esc(st) + '</span>'
       : "";
     return '<tr class="diff-row" data-entry="' + idx + '" data-field="' + escAttr(d.field) + '" data-action="' + escAttr(ca) + '" data-enrichment="' + (isEn ? "1" : "") + '" data-found-val="' + escAttr(fa) + '" data-original-val="' + escAttr(oa) + '"><td class="field-name"><span class="field-name-pill">' + esc(d.field) + '</span></td><td class="val-col val-col-original">' + origCell + '</td><td class="val-col val-col-suggested">' + sugCell + '</td><td class="field-actions-mini"><button class="fa-btn-x ' + (ca === "remove" ? "active" : "") + '" title="' + (isEn ? "Don\'t add" : "Remove field") + '" data-entry="' + idx + '" data-field="' + escAttr(d.field) + '" data-action="remove" data-val="">' + xSvg + '</button></td></tr>';
@@ -589,11 +614,11 @@
   function buildCardHTML(r) {
     const idx = r.index, entry = parsedEntries[idx];
     if (!fieldEdits[idx]) fieldEdits[idx] = {};
-    const needsEdit = r.status === "updated" || r.status === "needs_review";
+    const needsEdit = isNeedsUpdateStatus(r.status);
 
     let dupHTML = r.duplicate_of ? '<div class="duplicate-row">' + t("dup_of") + ' <strong>' + esc(r.duplicate_of) + '</strong></div>' : "";
     let revHTML = "", nfHTML = "", errHTML = "";
-    if (r.status === "needs_review" && r.found_title) revHTML = '<div class="review-hint">' + t("similarity") + ': <strong>' + esc(String(r.title_score)) + '%</strong> — <strong class="review-hint-match">' + esc(r.found_title) + '</strong></div>';
+    if (r.update_kind === "needs_review" && r.found_title) revHTML = '<div class="review-hint">' + t("similarity") + ': <strong>' + esc(String(r.title_score)) + '%</strong> — <strong class="review-hint-match">' + esc(r.found_title) + '</strong></div>';
     if (r.status === "not_found") nfHTML = '<div class="not-found-hint">' + (r.title.trim() ? t("not_found_msg") : t("no_title_msg")) + '</div>';
     if (r.status === "error") { const diags = parseDiags.filter(d => d.entry_id === r.entry_id); errHTML = '<div class="error-hint">' + diags.map(d => esc(d.message)).join("<br>") + '</div>'; }
 
@@ -606,7 +631,8 @@
         '</div>'
       : "";
 
-    const headerHTML = '<div class="entry-header"><div class="entry-header-text"><div class="entry-title">' + esc(r.title || t("no_title")) + '</div><div class="entry-meta">' + esc(r.entry_id) + ' &middot; ' + esc(r.entry_type) + '</div></div><div class="entry-header-aside">' + searchLinksHTML + '<div class="entry-tags">' + (r.duplicate_of ? '<span class="status-tag tag-duplicate">' + t("status_duplicate") + '</span>' : "") + '<span class="status-tag tag-' + escAttr(r.status) + '">' + statusLabel(r.status) + '</span></div></div></div>';
+    const collapseIcon = '<span class="entry-collapse-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>';
+    const headerHTML = '<div class="entry-header" role="button" tabindex="0" aria-expanded="false" data-entry-toggle="' + idx + '"><div class="entry-header-main">' + collapseIcon + '<div class="entry-header-text"><div class="entry-title">' + esc(r.title || t("no_title")) + '</div><div class="entry-meta">' + esc(r.entry_id) + ' &middot; ' + esc(r.entry_type) + '</div></div></div><div class="entry-header-aside">' + searchLinksHTML + '<div class="entry-tags">' + (r.duplicate_of ? '<span class="status-tag tag-duplicate">' + t("status_duplicate") + '</span>' : "") + '<span class="status-tag tag-' + escAttr(r.status) + '">' + statusLabel(r.status) + '</span></div></div></div>';
 
     if (needsEdit) {
       // Candidates panel
@@ -632,16 +658,53 @@
         candidatesHTML = '<div class="candidates-panel"><div class="candidates-header"><span class="candidates-title">' + t("candidates_title") + '</span><span class="candidates-count">' + r.candidates.length + '</span></div>' + itemsHTML + moreHTML + '</div>';
       }
       const detailSlot = '<div class="entry-detail-slot" id="detail-slot-' + idx + '"></div>';
-      return headerHTML + dupHTML + revHTML + candidatesHTML + detailSlot;
+      return headerHTML + '<div class="entry-body">' + dupHTML + revHTML + candidatesHTML + detailSlot + '</div>';
     } else {
       // Parsed / Verified / Not Found / Duplicate / Error: read-only original bib
       const origBib = B.entriesToBib([entry]);
       const bibReadonly = '<pre class="bib-readonly">' + esc(origBib) + '</pre>';
-      return headerHTML + dupHTML + errHTML + nfHTML + bibReadonly;
+      return headerHTML + '<div class="entry-body">' + dupHTML + errHTML + nfHTML + bibReadonly + '</div>';
     }
   }
 
   // ─── Four-view: render inside card ────────────────────────────────────
+  function setCardExpanded(idx, expanded) {
+    const card = document.getElementById("card-" + idx);
+    const r = results[idx];
+    if (!card || !r) return;
+    if (expanded) expandedCards.add(idx);
+    else expandedCards.delete(idx);
+    if (expanded) openedCards.add(idx);
+    card.classList.toggle("expanded", expanded);
+    card.classList.toggle("collapsed", !expanded);
+    card.classList.toggle("opened-once", openedCards.has(idx));
+    card.classList.toggle("unopened", !openedCards.has(idx));
+    const header = card.querySelector(".entry-header");
+    if (header) header.setAttribute("aria-expanded", expanded ? "true" : "false");
+    if (expanded && isNeedsUpdateStatus(r.status)) renderDetailInCard(idx);
+  }
+
+  function shouldIgnoreHeaderToggle(target) {
+    return !!target.closest("a, button, input, textarea, select, [contenteditable]");
+  }
+
+  document.addEventListener("click", e => {
+    const header = e.target.closest(".entry-header");
+    if (!header || shouldIgnoreHeaderToggle(e.target)) return;
+    const idx = parseInt(header.dataset.entryToggle);
+    if (isNaN(idx)) return;
+    setCardExpanded(idx, !expandedCards.has(idx));
+  });
+
+  document.addEventListener("keydown", e => {
+    const header = e.target.closest(".entry-header");
+    if (!header || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    const idx = parseInt(header.dataset.entryToggle);
+    if (isNaN(idx)) return;
+    setCardExpanded(idx, !expandedCards.has(idx));
+  });
+
   function buildFourViewHTML(idx) {
     const r = results[idx];
     const sourceLabel = r && r.found && r.found._source ? ' <span class="fv-source-badge">' + esc(r.found._source.toUpperCase()) + '</span>' : "";
@@ -689,7 +752,7 @@
     const fields = ALL_FIELDS.concat(extraFields.filter(f => !ALL_FIELDS.includes(f)));
 
     // Initialise fieldEdits for every field we show
-    const defaultAction = r.status === "updated" ? "found" : "original";
+    const defaultAction = r.update_kind === "updated" ? "found" : "original";
     for (const f of fields) {
       if (!fieldEdits[idx][f]) {
         const foundVal = (foundEntry[f] || "").toString();
@@ -927,33 +990,28 @@
     r.selectedCandidateIdx = ci;
     fieldEdits[idx] = {};
     applyCandidate(r, parsedEntries[idx], r.candidates[ci]);
-    // update in-place: no remove+append so position is preserved
-    const card = document.getElementById("card-" + idx);
-    if (card) {
-      card.className = "entry-card status-" + r.status;
-      card.dataset.status = r.status;
-      card.innerHTML = buildCardHTML(r);
-      applyFilterToCard(card, r);
-      renderDetailInCard(idx);
-    }
+    replaceCard(idx);
     updateSummary();
     rebuildToc();
   });
 
   // ─── Summary ───────────────────────────────────────────────────────────
   function updateSummary() {
-    const c = { parsed: 0, verified: 0, updated: 0, needs_review: 0, not_found: 0, error: 0 };
+    const c = { parsed: 0, verified: 0, needs_update: 0, not_found: 0, error: 0 };
     let dupes = 0;
-    results.forEach(r => { c[r.status] = (c[r.status] || 0) + 1; if (r.duplicate_of) dupes++; });
+    results.forEach(r => {
+      if (isNeedsUpdateStatus(r.status)) c.needs_update++;
+      else c[r.status] = (c[r.status] || 0) + 1;
+      if (r.duplicate_of) dupes++;
+    });
     const b = (sel, txt) => { const el = $(sel); if (el) el.textContent = txt; };
     b(".badge-parsed",     t("badge_parsed")     + ": " + c.parsed);
     b(".badge-verified",   t("badge_verified")   + ": " + c.verified);
-    b(".badge-updated",    t("badge_updated")    + ": " + c.updated);
-    b(".badge-review",     t("badge_review")     + ": " + c.needs_review);
+    b(".badge-updated",    t("badge_updated")    + ": " + c.needs_update);
     b(".badge-notfound",   t("badge_notfound")   + ": " + c.not_found);
     b(".badge-duplicates", t("badge_duplicates") + ": " + dupes);
     b(".badge-error",      t("badge_error")      + ": " + c.error);
-    $$(".summary-badge").forEach(b => b.classList.add("active"));
+    $$(".summary-badge").forEach(b => b.classList.toggle("active", activeFilter === "all" || b.dataset.filter === activeFilter));
   }
 
   // ─── LCS diff ──────────────────────────────────────────────────────────

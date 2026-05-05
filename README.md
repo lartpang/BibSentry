@@ -8,7 +8,7 @@ BibTeX Verifier is a browser-based tool for checking and correcting `.bib` files
 
 This project builds on the original [merfanian/Bibtex-Verifier](https://github.com/merfanian/Bibtex-Verifier). The original project provided the browser-based verification foundation: static GitHub Pages deployment, BibTeX parsing, CrossRef/Semantic Scholar checks, result cards, and export flow.
 
-This fork keeps that foundation and focuses on a broader verification workflow: stricter parsing, tiered multi-source lookup, candidate ranking, bilingual UI, parsed-first verification, activity logging, pause/resume control, four-view field editing, right-side navigation, privacy controls, and reviewed export.
+This fork keeps that foundation and focuses on a broader verification workflow: stricter parsing, tiered multi-source lookup, candidate ranking, bilingual UI, parsed-first verification, activity logging, pause/resume control, collapsed review cards, stable review ordering, four-view field editing, right-side navigation, privacy controls, and reviewed export.
 
 The original MIT license and copyright notice are preserved in [LICENSE](LICENSE). Additional attribution is recorded in [NOTICE](NOTICE).
 
@@ -58,25 +58,27 @@ Use the status badges to filter the result list.
 |---|---|
 | Parsed | Parsed successfully, waiting for verification. |
 | Verified | The selected candidate matches closely. |
-| Auto-Updated | Same work, but metadata can be enriched or normalized. |
-| Needs Review | Candidate exists, but title, author, year, venue, or version evidence is uncertain. |
+| Needs Update | The entry should be checked before export. This includes metadata enrichments, normalized values, and uncertain candidates that need manual judgment. |
 | Not Found | No enabled source produced a credible match. |
 | Duplicates | Another entry has the same normalized title. |
 | Error | Parsing produced a blocking diagnostic. |
 
+`Needs Update` entries are appended to the bottom of the result list in verification order, so you can inspect them from top to bottom in the same order they were found. After verification, editing, candidate changes, filtering, and language switching preserve that order.
+
 ### 5. Choose Candidates
 
-For changed or uncertain entries, the card shows up to 8 candidates.
+For `Needs Update` entries, expand the card to see up to 8 candidates.
 
 Supported actions:
 
+- Click the title header to expand or collapse a card.
 - Open the extra candidates list when the first three are not enough.
 - Click a candidate to recalculate comparison against that record.
 - Use quick links to check Google Scholar, Semantic Scholar, or DBLP manually.
 
 ### 6. Edit Fields
 
-`Auto-Updated` and `Needs Review` cards use a four-view editor.
+`Needs Update` cards use a four-view editor.
 
 | View | Action |
 |---|---|
@@ -86,6 +88,8 @@ Supported actions:
 | Diff | Inspect the before/after BibTeX diff. |
 
 The header refresh icon adopts all found values for that entry. The clear button empties a field; empty fields are omitted from export.
+
+Cards are collapsed by default to keep long files scannable. `Needs Update` cards use a dark red left border until opened once; after you expand a card, the left border turns green and stays green even if you collapse it again.
 
 ### 7. Navigate Long Files
 

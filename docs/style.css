@@ -565,7 +565,7 @@ code {
 .badge-verified { background: var(--teal-bg); color: var(--teal); border-color: var(--teal-border); }
 .badge-parsed { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
 .badge-updated { background: var(--yellow-bg); color: var(--yellow); border-color: var(--yellow-border); }
-.badge-review { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+.badge-review { background: var(--yellow-bg); color: var(--yellow); border-color: var(--yellow-border); }
 .badge-notfound { background: var(--gray-bg); color: var(--text-dim); border-color: var(--gray-border); }
 .badge-duplicates { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
 .badge-error { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
@@ -581,8 +581,8 @@ code {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 0.9rem 1.05rem;
-  padding-bottom: 1.35rem;
+  padding: 0;
+  overflow: hidden;
 }
 
 .entry-header {
@@ -591,11 +591,66 @@ code {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  padding: 0.82rem 1rem;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.entry-header:hover {
+  background: var(--accent-bg);
+}
+
+.entry-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.entry-card.collapsed .entry-header {
+  border-bottom-color: transparent;
+}
+
+.entry-header-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .entry-header-text {
   min-width: 0;
   flex: 1;
+}
+
+.entry-collapse-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: 0.05rem;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  flex-shrink: 0;
+  transition: transform 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.entry-card.expanded .entry-collapse-icon {
+  transform: rotate(180deg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.entry-body {
+  padding: 0.85rem 1.05rem 1.2rem;
+}
+
+.entry-card.collapsed .entry-body {
+  display: none;
 }
 
 .entry-header-aside {
@@ -676,7 +731,8 @@ code {
 .tag-verified { background: var(--teal-bg); color: var(--teal); }
 .tag-parsed { background: var(--accent-bg); color: var(--accent); }
 .tag-updated { background: var(--yellow-bg); color: var(--yellow); }
-.tag-needs_review { background: var(--red-bg); color: var(--red); }
+.tag-needs_review,
+.tag-needs_update { background: var(--yellow-bg); color: var(--yellow); }
 .tag-not_found { background: var(--gray-bg); color: var(--text-dim); }
 .tag-parse_error { background: var(--red-bg); color: var(--red); }
 .tag-parse_warning { background: var(--yellow-bg); color: var(--yellow); }
@@ -1996,7 +2052,10 @@ code {
 .status-parsed    { border-left: 3px solid var(--accent); }
 .status-verified  { border-left: 3px solid var(--teal); }
 .status-updated   { border-left: 3px solid var(--yellow); }
-.status-needs_review { border-left: 3px solid var(--red); }
+.status-needs_review,
+.status-needs_update { border-left: 3px solid #991b1b; }
+.status-needs_review.opened-once,
+.status-needs_update.opened-once { border-left-color: var(--green); }
 .status-not_found { border-left: 3px solid var(--text-dim); }
 .status-duplicate { border-left: 3px solid var(--purple); }
 .status-error     { border-left: 3px solid var(--red); }
@@ -2732,7 +2791,8 @@ code {
 .toc-dot-parsed     { background: var(--accent); }
 .toc-dot-verified   { background: var(--teal); }
 .toc-dot-updated    { background: var(--yellow); }
-.toc-dot-needs_review { background: var(--red); }
+.toc-dot-needs_review,
+.toc-dot-needs_update { background: var(--yellow); }
 .toc-dot-not_found  { background: var(--text-dim); }
 .toc-dot-duplicate  { background: var(--purple); }
 .toc-dot-error      { background: var(--red); }
