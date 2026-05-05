@@ -20,7 +20,7 @@
       status_needs_review: "Needs Review", status_not_found: "Not Found",
       status_error: "Error", status_duplicate: "Duplicate",
       view_original: "Original", view_found: "Found", view_edit: "Edit", view_diff: "Diff",
-      adopt_found: "Adopt Found", close: "×",
+      adopt_found: "Adopt all found values", close: "×",
       candidates_title: "Search Results", candidates_more: "more", candidates_less: "less",
       selected: "selected",
       log_events: "events", log_clear: "Clear",
@@ -41,6 +41,7 @@
       tier1: "Tier 1 — Published Records", tier2: "Tier 2 — Conference Proceedings", tier3: "Tier 3 — Preprints",
       copy: "Copy", copied: "Copied!",
       toc_title: "Contents",
+      clear_field: "Clear field",
       api_keys_title: "API Keys",
       api_keys_help: "Optional. Keys unlock higher rate limits. Keys stay in this page session unless you choose to remember them.",
       api_key_placeholder: "Paste API key here…",
@@ -64,7 +65,7 @@
       status_needs_review: "待审核", status_not_found: "未找到",
       status_error: "错误", status_duplicate: "重复",
       view_original: "原始内容", view_found: "检索结果", view_edit: "编辑区", view_diff: "差异对比",
-      adopt_found: "采用检索结果", close: "×",
+      adopt_found: "采用所有检索结果", close: "×",
       candidates_title: "检索结果", candidates_more: "更多", candidates_less: "收起",
       selected: "当前",
       log_events: "条记录", log_clear: "清空",
@@ -85,6 +86,7 @@
       tier1: "第一层 — 已出版记录", tier2: "第二层 — 会议论文集", tier3: "第三层 — 预印本",
       copy: "复制", copied: "已复制！",
       toc_title: "目录",
+      clear_field: "清空字段",
       api_keys_title: "API Keys",
       api_keys_help: "可选。配置后可提升请求频率上限。默认仅在当前页面会话保存，勾选记住后才写入本浏览器。",
       api_key_placeholder: "粘贴 API Key…",
@@ -643,7 +645,8 @@
   function buildFourViewHTML(idx) {
     const r = results[idx];
     const sourceLabel = r && r.found && r.found._source ? ' <span class="fv-source-badge">' + esc(r.found._source.toUpperCase()) + '</span>' : "";
-    const adoptBtn = '<button class="btn-adopt-found" data-entry="' + idx + '">' + esc(t("adopt_found")) + '</button>';
+    const refreshSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.49"/></svg>';
+    const adoptBtn = '<button class="btn-adopt-found" data-entry="' + idx + '" title="' + esc(t("adopt_found")) + '">' + refreshSvg + '</button>';
     const iconDiff = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>';
     return (
       '<div class="fv-field-table-wrap"><table class="fv-field-table" id="fv-table-' + idx + '">' +
@@ -691,9 +694,13 @@
       if (!fieldEdits[idx][f]) {
         const foundVal = (foundEntry[f] || "").toString();
         const origVal  = (entry[f]   || "").toString();
+        // Title: if the only difference is case/whitespace/LaTeX, keep original casing
+        const titleCaseOnly = f === "title" && origVal && foundVal &&
+          B.normalizeTitle(origVal) === B.normalizeTitle(foundVal);
+        const action = titleCaseOnly ? "original" : defaultAction;
         if (diffFieldSet.has(f)) {
           const d = r.field_diffs.find(x => x.field === f);
-          fieldEdits[idx][f] = { action: defaultAction, value: foundVal || origVal };
+          fieldEdits[idx][f] = { action, value: action === "original" ? origVal : (foundVal || origVal) };
           if (d) fieldEdits[idx][f].foundVal = d.found || "";
         } else {
           fieldEdits[idx][f] = { action: "original", value: origVal };
@@ -716,7 +723,10 @@
       const origVal  = (entry[f]      || "").toString();
       const foundVal = (foundEntry[f] || "").toString();
       const fe       = fieldEdits[idx][f] || { action: "original", value: origVal };
-      const hasDiff  = diffFieldSet.has(f) || (origVal !== foundVal && (origVal || foundVal));
+      // For title: ignore differences that are purely case / whitespace / LaTeX accent variants
+      const titleCaseOnly = f === "title" && origVal && foundVal &&
+        B.normalizeTitle(origVal) === B.normalizeTitle(foundVal);
+      const hasDiff  = !titleCaseOnly && (diffFieldSet.has(f) || (origVal !== foundVal && (origVal || foundVal)));
       const isNew    = !origVal && foundVal;   // enrichment: field only in found
 
       const tr = document.createElement("tr");
@@ -729,11 +739,11 @@
       tdField.className = "fv-col-field";
       tdField.innerHTML = '<span class="fv-field-name">' + esc(f) + (isNew ? ' <span class="fv-badge-new">+</span>' : "") + '</span>';
 
-      // Original cell
+      // Original cell — clickable to restore that field's original value into edit
       const tdOrig = document.createElement("td");
       tdOrig.className = "fv-col-orig";
       tdOrig.innerHTML = origVal
-        ? '<span class="fv-cell-val' + (hasDiff && !isNew ? " fv-val-changed" : "") + '">' + esc(origVal) + '</span>'
+        ? '<button class="fv-orig-cell' + (hasDiff && !isNew ? " fv-val-changed" : "") + '" data-entry="' + idx + '" data-field="' + escAttr(f) + '" data-val="' + escAttr(origVal) + '" title="Use original value">' + esc(origVal) + '</button>'
         : '<span class="fv-cell-empty">—</span>';
 
       // Found cell (clickable to adopt into edit)
@@ -746,15 +756,16 @@
       }
 
       // Edit cell (contenteditable)
-      const editVal = fe.action === "remove" ? "" : (fe.action === "found" ? foundVal : (fe.action === "original" ? origVal : fe.value));
+      const editVal = fe.action === "custom" && fe.value === "" ? "" : (fe.action === "found" ? foundVal : (fe.action === "original" ? origVal : fe.value));
+      const isEmpty = fe.action === "custom" && fe.value === "";
       const tdEdit = document.createElement("td");
       tdEdit.className = "fv-col-edit";
-      tdEdit.innerHTML = '<span class="fv-edit-cell' + (fe.action === "remove" ? " fv-removed" : "") + '" contenteditable="' + (fe.action === "remove" ? "false" : "true") + '" spellcheck="false" data-entry="' + idx + '" data-field="' + escAttr(f) + '">' + esc(editVal) + '</span>';
+      tdEdit.innerHTML = '<span class="fv-edit-cell' + (isEmpty ? " fv-cleared" : "") + '" contenteditable="true" spellcheck="false" data-entry="' + idx + '" data-field="' + escAttr(f) + '">' + esc(editVal) + '</span>';
 
-      // Actions cell
+      // Actions cell — clear button only
       const tdAct = document.createElement("td");
       tdAct.className = "fv-col-act";
-      tdAct.innerHTML = '<button class="fv-btn-remove' + (fe.action === "remove" ? " active" : "") + '" data-entry="' + idx + '" data-field="' + escAttr(f) + '" title="' + (isNew ? "Don\'t add" : "Remove field") + '">' + xSvg + '</button>';
+      tdAct.innerHTML = '<button class="fv-btn-remove" data-entry="' + idx + '" data-field="' + escAttr(f) + '" title="' + esc(t("clear_field")) + '">' + xSvg + '</button>';
 
       tr.append(tdField, tdOrig, tdFound, tdEdit, tdAct);
       tbody.appendChild(tr);
@@ -805,6 +816,21 @@
     refreshDetailDiff(idx);
   });
 
+  // Click original-cell value → restore that single field into edit
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".fv-orig-cell");
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.entry), field = btn.dataset.field, val = btn.dataset.val;
+    if (isNaN(idx)) return;
+    if (!fieldEdits[idx]) fieldEdits[idx] = {};
+    fieldEdits[idx][field] = { action: "original", value: val };
+    const row = btn.closest(".fv-row");
+    const editCell = row?.querySelector(".fv-edit-cell");
+    if (editCell) { editCell.textContent = val; editCell.classList.remove("fv-cleared"); }
+    flashRow(row);
+    refreshDetailDiff(idx);
+  });
+
   // Click found-cell value → adopt that single field into edit
   document.addEventListener("click", e => {
     const btn = e.target.closest(".fv-adopt-cell");
@@ -815,7 +841,7 @@
     fieldEdits[idx][field] = { action: "found", value: val };
     const row = btn.closest(".fv-row");
     const editCell = row?.querySelector(".fv-edit-cell");
-    if (editCell) { editCell.textContent = val; editCell.classList.remove("fv-removed"); editCell.contentEditable = "true"; }
+    if (editCell) { editCell.textContent = val; editCell.classList.remove("fv-cleared"); }
     const removeBtn = row?.querySelector(".fv-btn-remove");
     if (removeBtn) removeBtn.classList.remove("active");
     flashRow(row);
@@ -829,33 +855,21 @@
     const idx = parseInt(cell.dataset.entry), field = cell.dataset.field;
     if (!fieldEdits[idx]) fieldEdits[idx] = {};
     fieldEdits[idx][field] = { action: "custom", value: cell.textContent };
+    cell.classList.toggle("fv-cleared", cell.textContent === "");
     refreshDetailDiff(idx);
   });
 
-  // Remove / restore field button
+  // Clear field button — empties the edit cell only
   document.addEventListener("click", e => {
     const btn = e.target.closest(".fv-btn-remove");
     if (!btn) return;
     const idx = parseInt(btn.dataset.entry), field = btn.dataset.field;
     if (isNaN(idx)) return;
     if (!fieldEdits[idx]) fieldEdits[idx] = {};
-    const fe = fieldEdits[idx][field] || {};
+    fieldEdits[idx][field] = { action: "custom", value: "" };
     const row = btn.closest(".fv-row");
     const editCell = row?.querySelector(".fv-edit-cell");
-    if (fe.action === "remove") {
-      // restore
-      const r = results[idx], entry = parsedEntries[idx];
-      const origVal = (entry?.[field] || "").toString();
-      const foundVal = ((r?.found || {})[field] || "").toString();
-      const restoreVal = (r?.status === "updated" && foundVal) ? foundVal : origVal;
-      fieldEdits[idx][field] = { action: r?.status === "updated" ? "found" : "original", value: restoreVal };
-      if (editCell) { editCell.textContent = restoreVal; editCell.classList.remove("fv-removed"); editCell.contentEditable = "true"; }
-      btn.classList.remove("active");
-    } else {
-      fieldEdits[idx][field] = { action: "remove", value: "", _savedValue: fe.value || "" };
-      if (editCell) { editCell.textContent = ""; editCell.classList.add("fv-removed"); editCell.contentEditable = "false"; }
-      btn.classList.add("active");
-    }
+    if (editCell) { editCell.textContent = ""; editCell.classList.add("fv-cleared"); }
     flashRow(row);
     refreshDetailDiff(idx);
   });
@@ -866,7 +880,6 @@
     for (const [f, fe] of Object.entries(edits)) {
       if (!fe) continue;
       if (fe.action === "found" || fe.action === "custom") { if (fe.value) editEntry[f] = fe.value; else delete editEntry[f]; }
-      else if (fe.action === "remove") delete editEntry[f];
     }
     return editEntry;
   }
@@ -923,6 +936,7 @@
       applyFilterToCard(card, r);
       renderDetailInCard(idx);
     }
+    updateSummary();
     rebuildToc();
   });
 

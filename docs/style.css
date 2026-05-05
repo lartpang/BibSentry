@@ -2147,6 +2147,29 @@ code {
   outline: 1px solid var(--green-border);
 }
 
+/* Original cell: clickable button to restore original value */
+.fv-orig-cell {
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  color: var(--text);
+  word-break: break-word;
+  border-radius: var(--radius-sm);
+  padding: 0.1rem 0.2rem;
+  margin: -0.1rem -0.2rem;
+  transition: background 0.12s, color 0.12s;
+  line-height: 1.5;
+}
+.fv-val-changed {
+  color: var(--yellow);
+}
+.fv-orig-cell:hover {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+  outline: 1px solid var(--yellow-border);
+}
+
 /* Edit cell: contenteditable */
 .fv-edit-cell {
   display: block;
@@ -2169,6 +2192,10 @@ code {
   opacity: 0.35;
   pointer-events: none;
 }
+.fv-edit-cell.fv-cleared {
+  opacity: 0.35;
+  font-style: italic;
+}
 
 /* Remove button */
 .fv-btn-remove {
@@ -2188,10 +2215,15 @@ code {
 .fv-btn-remove:hover { border-color: var(--red); color: var(--red); }
 .fv-btn-remove.active { background: var(--red-bg); border-color: var(--red-border); color: var(--red); }
 
-/* Adopt-all button in table header */
+/* Adopt-all button in table header — icon only */
 .fv-col-act .btn-adopt-found {
-  font-size: 0.65rem;
-  padding: 0.2rem 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 

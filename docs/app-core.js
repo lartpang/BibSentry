@@ -106,11 +106,17 @@
 
   function rankCandidates(entry,ct,candidates){
     const oy=parseInt(entry.year||"0",10);
-    const published=candidates.filter(c=>!B.isArxivCandidate(c)&&B.classifyVersion(c)!=="preprint");
-    const others=candidates.filter(c=>B.isArxivCandidate(c)||B.classifyVersion(c)==="preprint");
-    function score(c){const ts=B.titleSimilarity(ct,c.title||"");let ys=0;if(oy>0&&c.year){const cy=parseInt(c.year,10);ys=Math.max(0,10-Math.abs(cy-oy));}return ts+ys;}
-    const sf=(a,b)=>score(b)-score(a);
-    return[...published.sort(sf),...others.sort(sf)];}
+    const isPub=c=>!B.isArxivCandidate(c)&&B.classifyVersion(c)!=="preprint";
+    return[...candidates].sort((a,b)=>{
+      const tsA=B.titleSimilarity(ct,a.title||""),tsB=B.titleSimilarity(ct,b.title||"");
+      if(Math.abs(tsB-tsA)>0.5)return tsB-tsA;
+      // tiebreak 1: published before preprint
+      const pA=isPub(a)?1:0,pB=isPub(b)?1:0;
+      if(pB!==pA)return pB-pA;
+      // tiebreak 2: closer year
+      if(oy>0){const dyA=a.year?Math.abs(parseInt(a.year,10)-oy):999,dyB=b.year?Math.abs(parseInt(b.year,10)-oy):999;if(dyA!==dyB)return dyA-dyB;}
+      return tsB-tsA;
+    });}
 
   function selBest(o,cs){if(!cs.length)return null;if(cs.length===1)return cs[0];const oy=parseInt(o.year||"0",10),s=[...cs];
     if(oy>0)s.sort((a,b)=>Math.abs(parseInt(a.year||"0",10)-oy)-Math.abs(parseInt(b.year||"0",10)-oy));
