@@ -133,7 +133,7 @@ code {
 
 /* ─── Hero ─────────────────────────────────────────────────────── */
 .hero {
-  margin-bottom: 1rem;
+  margin-bottom: 0.85rem;
 }
 
 .hero-top {
@@ -203,11 +203,10 @@ code {
 :root:not([data-theme]) .theme-toggle .icon-sun { display: block; }
 
 .hero-tagline {
-  color: var(--accent);
-  font-size: 1.05rem;
+  color: var(--text-dim);
+  font-size: 0.95rem;
   font-weight: 500;
-  margin-bottom: 0.35rem;
-  letter-spacing: -0.01em;
+  margin-top: 0.2rem;
 }
 
 .hero-lead {
@@ -223,24 +222,128 @@ code {
   font-weight: 600;
 }
 
+.start-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 0.75rem;
+  align-items: stretch;
+  margin-bottom: 0.75rem;
+}
+
+.start-card,
+.reference-card,
+.feature-card,
+.faq details {
+  --guide-color: var(--accent);
+  --guide-bg: var(--accent-bg);
+  --guide-border: rgba(59, 130, 246, 0.34);
+  background: linear-gradient(180deg, var(--guide-bg), var(--surface) 64%);
+  border: 1.5px solid var(--guide-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+
+.start-card-header,
+.reference-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.95rem;
+  background: var(--guide-bg);
+  border-bottom: 1px solid var(--guide-border);
+}
+
+.start-card-header h2,
+.reference-card-header h2 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.start-card-header p,
+.reference-card-header p {
+  margin-top: 0.18rem;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.input-workbench {
+  --guide-color: var(--accent);
+  --guide-bg: var(--accent-bg);
+  --guide-border: rgba(59, 130, 246, 0.38);
+}
+
+.review-brief {
+  --guide-color: var(--yellow);
+  --guide-bg: var(--yellow-bg);
+  --guide-border: var(--yellow-border);
+}
+
+.mini-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.35rem 0;
+}
+
+.mini-status-row {
+  display: grid;
+  grid-template-columns: 0.75rem minmax(0, 1fr);
+  gap: 0.65rem;
+  padding: 0.62rem 0.9rem;
+  align-items: baseline;
+}
+
+.mini-status-row + .mini-status-row {
+  border-top: 1px solid var(--border);
+}
+
+.mini-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  margin-top: 0.32rem;
+}
+
+.mini-verified .mini-status-dot { background: var(--teal); }
+.mini-update .mini-status-dot { background: var(--yellow); }
+.mini-notfound .mini-status-dot { background: var(--text-dim); }
+
+.mini-status-row strong {
+  display: block;
+  font-size: 0.82rem;
+}
+
+.mini-status-row span:last-child {
+  display: block;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  margin-top: 0.12rem;
+}
+
 /* ─── Input tabs ───────────────────────────────────────────────── */
 .input-tabs {
   display: flex;
   gap: 0;
   margin-bottom: 0;
-  border-bottom: 2px solid var(--border);
+  padding: 0 0.95rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .input-tab {
-  padding: 0.45rem 1rem;
-  font-size: 0.9rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   background: none;
   border: none;
   color: var(--text-dim);
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  margin-bottom: -1px;
   transition: color 0.15s, border-color 0.15s;
 }
 
@@ -263,9 +366,9 @@ code {
 
 /* ─── Paste area ───────────────────────────────────────────────── */
 .bib-textarea {
-  width: 100%;
+  width: calc(100% - 1.9rem);
   min-height: 190px;
-  margin-top: 0.7rem;
+  margin: 0.85rem 0.95rem 0;
   padding: 0.8rem;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 0.85rem;
@@ -289,7 +392,7 @@ code {
 
 .btn-verify-paste {
   display: block;
-  margin-top: 0.75rem;
+  margin: 0.75rem 0.95rem 0.95rem;
   padding: 0.5rem 1rem;
   background: var(--accent);
   color: #fff;
@@ -307,9 +410,10 @@ code {
 
 /* ─── Upload area ──────────────────────────────────────────────── */
 .upload-zone {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 2.1rem 1.5rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1.45rem 1.25rem;
+  margin: 0.95rem;
   text-align: center;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
@@ -329,14 +433,14 @@ code {
 }
 
 .upload-zone .icon {
-  font-size: 2.1rem;
-  margin-bottom: 0.3rem;
+  font-size: 1.65rem;
+  margin-bottom: 0.25rem;
   display: block;
 }
 
 .upload-zone .label {
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 0.93rem;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -2847,5 +2951,111 @@ code {
     top: auto;
     bottom: 5.5rem;
     transform: none;
+  }
+}
+
+/* Initial app view: compact cards aligned with result cards */
+.quick-reference {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.reference-card:nth-child(1) {
+  --guide-color: var(--accent);
+  --guide-bg: var(--accent-bg);
+  --guide-border: rgba(59, 130, 246, 0.34);
+}
+.reference-card:nth-child(2) {
+  --guide-color: var(--teal);
+  --guide-bg: var(--teal-bg);
+  --guide-border: var(--teal-border);
+}
+.reference-card:nth-child(3) {
+  --guide-color: var(--yellow);
+  --guide-bg: var(--yellow-bg);
+  --guide-border: var(--yellow-border);
+}
+
+.reference-card-header {
+  min-height: 100%;
+  justify-content: flex-start;
+}
+
+.reference-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border: 1px solid var(--guide-border);
+  border-radius: var(--radius-sm);
+  background: var(--guide-bg);
+  color: var(--guide-color);
+  font-size: 0.75rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.features {
+  margin-top: 1rem;
+  padding-top: 0;
+  border-top: none;
+}
+
+.feature-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+}
+
+.feature-card {
+  --guide-color: var(--purple);
+  --guide-bg: var(--purple-bg);
+  --guide-border: var(--purple-border);
+  padding: 0.75rem 0.95rem;
+}
+
+.feature-card h3 {
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.feature-card p {
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.faq {
+  margin-top: 1rem;
+  padding-top: 0;
+  border-top: none;
+}
+
+.faq details {
+  --guide-color: var(--text-dim);
+  --guide-bg: var(--gray-bg);
+  --guide-border: var(--gray-border);
+}
+
+.faq summary {
+  padding: 0.72rem 0.95rem;
+  font-size: 0.84rem;
+}
+
+.faq details p {
+  padding: 0 0.95rem 0.85rem;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 960px) {
+  .start-workspace {
+    grid-template-columns: 1fr;
+  }
+  .quick-reference,
+  .feature-grid {
+    grid-template-columns: 1fr;
   }
 }

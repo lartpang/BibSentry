@@ -56,32 +56,92 @@
           </button>
         </div>
       </div>
-      <p class="hero-tagline">Catch errors, hallucinated references, and missing metadata before you submit.</p>
-      <p class="hero-lead">Upload a <code>.bib</code> file or paste directly from Overleaf.
-        BibTeX Verifier checks every entry against selected academic sources to find
-        wrong authors, incorrect years, mismatched venues, missing DOIs, duplicates,
-        and <strong>AI-hallucinated citations</strong> that don't exist in any selected source.
-        Parsing and review stay in your browser; online verification sends lookup queries only to the sources you enable.</p>
+      <p class="hero-tagline">Verify BibTeX entries, review mismatches, and export a cleaner bibliography.</p>
     </header>
 
-    <div class="input-tabs">
-      <button class="input-tab active" data-tab="upload">Upload file</button>
-      <button class="input-tab" data-tab="paste">Paste BibTeX</button>
+    <div class="start-workspace">
+      <section class="start-card input-workbench">
+        <div class="start-card-header">
+          <div>
+            <h2>Load bibliography</h2>
+            <p>Parse locally first, then verify entries with selected sources.</p>
+          </div>
+          <span class="status-tag tag-parsed">Browser only</span>
+        </div>
+
+        <div class="input-tabs">
+          <button class="input-tab active" data-tab="upload">Upload file</button>
+          <button class="input-tab" data-tab="paste">Paste BibTeX</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-upload">
+          <div class="upload-zone">
+            <span class="icon">&#128462;</span>
+            <span class="label">Drop your .bib file here or click to browse</span>
+            <p>Standard BibTeX &amp; BibLaTeX &middot; Processed entirely in your browser</p>
+            <input type="file" id="file-input" accept=".bib" />
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-paste">
+          <textarea id="bib-paste" class="bib-textarea" placeholder="Paste your BibTeX content here, e.g. from Overleaf...&#10;&#10;@article{example2024,&#10;  title={Your Paper Title},&#10;  author={Author, First and Author, Second},&#10;  year={2024},&#10;  journal={Some Journal}&#10;}"></textarea>
+          <button class="btn-verify-paste" id="btn-verify-paste">Parse BibTeX</button>
+        </div>
+      </section>
+
+      <aside class="start-card review-brief">
+        <div class="start-card-header">
+          <div>
+            <h2>Review queue</h2>
+            <p>After parsing, inspect entries with the same card pattern used in results.</p>
+          </div>
+        </div>
+        <div class="mini-status-list">
+          <div class="mini-status-row mini-verified">
+            <span class="mini-status-dot"></span>
+            <div><strong>Verified</strong><span>Candidate matches closely.</span></div>
+          </div>
+          <div class="mini-status-row mini-update">
+            <span class="mini-status-dot"></span>
+            <div><strong>Needs Update</strong><span>Open once to mark as reviewed.</span></div>
+          </div>
+          <div class="mini-status-row mini-notfound">
+            <span class="mini-status-dot"></span>
+            <div><strong>Not Found</strong><span>Check manually before export.</span></div>
+          </div>
+        </div>
+      </aside>
     </div>
 
-    <div class="tab-panel active" id="tab-upload">
-      <div class="upload-zone">
-        <span class="icon">&#128462;</span>
-        <span class="label">Drop your .bib file here or click to browse</span>
-        <p>Standard BibTeX &amp; BibLaTeX &middot; Processed entirely in your browser</p>
-        <input type="file" id="file-input" accept=".bib" />
+    <section class="quick-reference info-section" id="how-it-works">
+      <div class="reference-card">
+        <div class="reference-card-header">
+          <span class="reference-index">1</span>
+          <div>
+            <h2>Parse first</h2>
+            <p>Entries appear before online verification starts, including duplicate and parse-error markers.</p>
+          </div>
+        </div>
       </div>
-    </div>
-
-    <div class="tab-panel" id="tab-paste">
-      <textarea id="bib-paste" class="bib-textarea" placeholder="Paste your BibTeX content here, e.g. from Overleaf...&#10;&#10;@article{example2024,&#10;  title={Your Paper Title},&#10;  author={Author, First and Author, Second},&#10;  year={2024},&#10;  journal={Some Journal}&#10;}"></textarea>
-      <button class="btn-verify-paste" id="btn-verify-paste">Parse BibTeX</button>
-    </div>
+      <div class="reference-card">
+        <div class="reference-card-header">
+          <span class="reference-index">2</span>
+          <div>
+            <h2>Verify sources</h2>
+            <p>DBLP, CrossRef, Semantic Scholar, CVF, OpenReview, and arXiv run in tiered order.</p>
+          </div>
+        </div>
+      </div>
+      <div class="reference-card">
+        <div class="reference-card-header">
+          <span class="reference-index">3</span>
+          <div>
+            <h2>Review updates</h2>
+            <p><strong>Needs Update</strong> cards are appended in verification order and keep stable ordering while you edit.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- Table of Contents sidebar -->
     <div class="toc-sidebar" id="toc-sidebar">
@@ -115,95 +175,37 @@
 
     </div>
 
-    <section class="how-it-works info-section" id="how-it-works">
-      <h2>How it works</h2>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <h3>Upload or paste</h3>
-          <p>Drop your <code>.bib</code> file or paste directly from Overleaf. Everything is parsed in your browser; online verification sends lookup queries only to selected public services.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <h3>Verify</h3>
-          <p>Each entry is looked up by title or available identifier against the selected academic sources. Authors, year, venue, DOI, and other fields are compared to the published record. Entries that don't match any real publication are flagged ??perfect for catching AI-hallucinated citations.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <h3>Review &amp; edit</h3>
-          <p>Results are color-coded: <strong class="c-green">Verified</strong> means everything matches,
-            <strong class="c-yellow">Needs Update</strong> shows entries that need checking or inline edits,
-            and <strong>Not Found</strong> flags missing publications. A live preview shows the corrected BibTeX in real time.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">4</div>
-          <h3>Download</h3>
-          <p>Download or copy the corrected <code>.bib</code> file with your changes applied. Ready for LaTeX, Overleaf, or any reference manager.</p>
-        </div>
-      </div>
-    </section>
-
     <section class="features info-section">
-      <h2>Features</h2>
+      <h2>What gets checked</h2>
       <div class="feature-grid">
         <div class="feature-card">
-          <div class="feature-icon">&#129302;</div>
-          <h3>Hallucination detection</h3>
-          <p>Flags entries whose titles don't match any known publication ??catches fabricated references from AI-generated bibliographies.</p>
+          <h3>Existence</h3>
+          <p>Flags entries whose titles do not match credible records in the enabled sources.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#128269;</div>
-          <h3>Multi-source verification</h3>
-          <p>Queries configurable academic sources to maximize coverage and metadata quality.</p>
+          <h3>Metadata</h3>
+          <p>Compares authors, year, venue, DOI, pages, volume, and publisher fields.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">&#128203;</div>
-          <h3>Field-by-field diff</h3>
-          <p>See exactly which fields differ ??authors, year, venue, DOI, pages ??with inline editing and a live BibTeX preview.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128274;</div>
-          <h3>Privacy-first</h3>
-          <p>Your file is parsed locally. Online verification sends titles, identifiers, or source URLs only to the selected public lookup services.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#128221;</div>
-          <h3>DOI &amp; metadata enrichment</h3>
-          <p>Fills in missing DOIs, publisher info, volume, pages, and other metadata from the online record automatically.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#127919;</div>
-          <h3>Smart matching</h3>
-          <p>Fuzzy title matching, LaTeX-aware text processing, and last-name-based author comparison handle real-world formatting differences.</p>
+          <h3>Export edits</h3>
+          <p>Shows a four-view editor with Original, Found, Edit, and Diff columns.</p>
         </div>
       </div>
     </section>
 
     <section class="faq info-section">
-      <h2>FAQ</h2>
+      <h2>Notes</h2>
       <details>
-        <summary>Can it detect AI-hallucinated references?</summary>
-        <p>Yes. When a BibTeX entry's title doesn't match any real publication in the selected academic sources, it's flagged as "Not Found" or "Needs Update." This is how fabricated citations from ChatGPT, Copilot, or other AI tools get caught ??the paper simply doesn't exist in any selected academic database.</p>
+        <summary>Privacy</summary>
+        <p>Your full file is parsed in the browser. Verification sends lookup queries only to sources you enable.</p>
       </details>
       <details>
-        <summary>Is my data safe?</summary>
-        <p>Your <code>.bib</code> file is parsed entirely in your browser. Online verification sends lookup queries only to enabled public sources such as DBLP, CrossRef, Semantic Scholar, CVF, OpenReview, and arXiv. Optional Semantic Scholar API keys are sent only to Semantic Scholar.</p>
+        <summary>Missing records</summary>
+        <p>Workshop papers, theses, private reports, or very recent publications may need manual checking.</p>
       </details>
       <details>
-        <summary>Why are some entries "Not Found"?</summary>
-        <p>Not every paper is indexed by the selected academic sources. Workshop papers, theses, private reports, and very recent publications may not be found. The tool flags these so you can verify them manually ??or remove them if they're fabricated.</p>
-      </details>
-      <details>
-        <summary>Why does verification take a while?</summary>
-        <p>To respect the free APIs' rate limits, requests are sent at a controlled pace with adaptive throttling. For a file with 50 entries, expect roughly 2?? minutes. You can review results and change settings while it's still processing.</p>
-      </details>
-      <details>
-        <summary>Does it work with Overleaf?</summary>
-        <p>Yes! You can copy your entire <code>.bib</code> file from Overleaf and paste it directly into the "Paste BibTeX" tab. After reviewing, download the corrected file and upload it back to Overleaf.</p>
-      </details>
-      <details>
-        <summary>Is this open source?</summary>
-        <p>Yes! The full source code is on <a href="https://github.com/lartpang/Bibtex-Verifier" target="_blank">GitHub</a> under the MIT license. Contributions are welcome.</p>
+        <summary>Rate limits</summary>
+        <p>Public APIs are queried at a controlled pace. You can pause, resume, and review completed entries while verification continues.</p>
       </details>
     </section>
 
