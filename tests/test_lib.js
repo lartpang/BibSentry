@@ -357,13 +357,50 @@ test("converts CrossRef response to standard format", () => {
     DOI: "10.5555/3295222.3295349",
     volume: "30",
     page: "5998-6008",
+    type: "proceedings-article",
   };
   const result = lib.crossrefToStandard(item);
   assert.strictEqual(result.title, "Attention Is All You Need");
   assert.strictEqual(result.author, "Vaswani, Ashish");
   assert.strictEqual(result.year, "2017");
+  assert.strictEqual(result.journal, "");
+  assert.strictEqual(result.booktitle, "NeurIPS");
   assert.strictEqual(result.doi, "10.5555/3295222.3295349");
+  assert.strictEqual(result._crossref_type, "proceedings-article");
   assert.strictEqual(result._source, "crossref");
+});
+
+test("maps CrossRef journal articles to journal", () => {
+  const result = lib.crossrefToStandard({
+    title: ["Journal Paper"],
+    "published-online": { "date-parts": [[2024, 3, 1]] },
+    "container-title": ["IEEE Transactions on Pattern Analysis and Machine Intelligence"],
+    type: "journal-article",
+  });
+  assert.strictEqual(result.year, "2024");
+  assert.strictEqual(result.journal, "IEEE Transactions on Pattern Analysis and Machine Intelligence");
+  assert.strictEqual(result.booktitle, "");
+  assert.strictEqual(lib.classifyVersion(result), "journal");
+});
+
+test("uses CrossRef type to classify proceedings and posted content", () => {
+  const proceedings = lib.crossrefToStandard({
+    title: ["Conference Paper"],
+    issued: { "date-parts": [[2023]] },
+    event: { name: "Example Conference 2023" },
+    type: "proceedings-article",
+  });
+  const posted = lib.crossrefToStandard({
+    title: ["Preprint Paper"],
+    "group-title": "Research Square",
+    type: "posted-content",
+  });
+
+  assert.strictEqual(proceedings.booktitle, "Example Conference 2023");
+  assert.strictEqual(lib.classifyVersion(proceedings), "conference");
+  assert.strictEqual(posted.journal, "");
+  assert.strictEqual(posted.booktitle, "");
+  assert.strictEqual(lib.classifyVersion(posted), "preprint");
 });
 
 test("handles missing fields gracefully", () => {

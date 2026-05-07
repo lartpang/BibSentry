@@ -37,7 +37,7 @@
 
   async function searchSSMatch(t,h){const d=await rF(bU(SS_MATCH,{query:t,fields:SS_FIELDS}),{is404:true,headers:h});if(!d?.data?.[0])return null;return B.ssToStandard(d.data[0]);}
   async function searchSSSearch(t,h){const d=await rF(bU(SS_SEARCH,{query:t,limit:"5",fields:SS_FIELDS}),{headers:h});return(d?.data||[]).map(B.ssToStandard);}
-  async function searchCrossref(t){const d=await rF(bU(CROSSREF_API,{"query.title":t,rows:"5",select:"title,author,published-print,published-online,container-title,volume,issue,page,DOI,publisher,URL,type"}));return(d?.message?.items||[]).map(B.crossrefToStandard);}
+  async function searchCrossref(t){const d=await rF(bU(CROSSREF_API,{"query.title":t,rows:"5",select:"title,author,published-print,published-online,published,issued,container-title,group-title,event,volume,issue,page,DOI,publisher,URL,type,ISSN,ISBN"}));return(d?.message?.items||[]).map(B.crossrefToStandard);}
   async function searchDBLP(t){const d=await rF(bU(DBLP_API,{q:t,format:"json",h:"5"}));const h=d?.result?.hits?.hit;if(!h)return[];return(Array.isArray(h)?h:[h]).map(x=>B.dblpToStandard(x.info)).filter(Boolean);}
   async function searchArxiv(t){
     const xml=await rF(bU(ARXIV_API,{search_query:`ti:"${t}"`,start:"0",max_results:"5",sortBy:"relevance",sortOrder:"descending"}),{txt:true});

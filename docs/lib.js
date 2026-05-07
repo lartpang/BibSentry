@@ -747,15 +747,21 @@
       return f ? `${f}, ${g}`.replace(/, $/, "") : "";
     }).filter(Boolean);
 
-    const dp = item["published-print"] || item["published-online"] || {};
+    const dp = item["published-print"] || item["published-online"] || item.published || item.issued || {};
     const year = dp["date-parts"]?.[0]?.[0]?.toString() || "";
     const container = item["container-title"] || [];
+    const type = String(item.type || "").toLowerCase();
+    const venue = container[0] || item.event?.name || item["group-title"] || "";
+    const isJournal = type === "journal-article" || type === "journal" || type === "journal-issue" || type === "journal-volume";
+    const isProceedings = type === "proceedings-article" || type === "proceedings" || type === "proceedings-series";
+    const isBookLike = type.startsWith("book-") || type === "book" || type === "monograph" || type === "edited-book" || type === "reference-book";
 
     return {
       title: (item.title || [""])[0],
       author: authors.join(" and "),
       year,
-      journal: container[0] || "",
+      journal: isJournal ? venue : "",
+      booktitle: isProceedings || isBookLike ? venue : "",
       volume: item.volume || "",
       number: item.issue || "",
       pages: item.page || "",
@@ -763,6 +769,7 @@
       publisher: item.publisher || "",
       url: item.URL || "",
       _source: "crossref",
+      _crossref_type: type,
     };
   }
 
@@ -1168,6 +1175,10 @@
 
   function classifyVersion(entry) {
     const type = (entry.ENTRYTYPE || entry.entry_type || "").toLowerCase();
+    const crossrefType = String(entry._crossref_type || "").toLowerCase();
+    if (crossrefType === "posted-content") return "preprint";
+    if (crossrefType === "journal-article" || crossrefType === "journal") return "journal";
+    if (crossrefType === "proceedings-article" || crossrefType === "proceedings" || crossrefType === "proceedings-series") return "conference";
     const venue = `${entry.journal || ""} ${entry.booktitle || ""} ${entry.series || ""} ${entry.eprint || ""} ${entry.archiveprefix || ""}`.toLowerCase();
     if (type === "article" || entry.journal) {
       if (/arxiv|corr|preprint/.test(venue)) return "preprint";
