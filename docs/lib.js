@@ -773,6 +773,74 @@
     };
   }
 
+  function zenodoToStandard(record) {
+    const metadata = record?.metadata || {};
+    const creators = metadata.creators || [];
+    const authors = creators.map(c => {
+      const po = c.person_or_org || {};
+      const family = po.family_name || c.family_name || "";
+      const given = po.given_name || c.given_name || "";
+      const name = c.name || po.name || "";
+      if (family) return `${family}, ${given}`.replace(/, $/, "");
+      return String(name || "").trim();
+    }).filter(Boolean);
+
+    const publicationDate = String(metadata.publication_date || record.created || "");
+    const resourceType = metadata.resource_type || {};
+    const journal = metadata.journal || {};
+    const meeting = metadata.meeting || {};
+    const venue = journal.title || "";
+    const meetingTitle = meeting.title || meeting.acronym || "";
+    const doi = record.doi || metadata.doi || "";
+
+    return {
+      title: metadata.title || record.title || "",
+      author: authors.join(" and "),
+      year: publicationDate.slice(0, 4),
+      journal: venue,
+      booktitle: venue ? "" : meetingTitle,
+      volume: journal.volume || "",
+      number: journal.issue || "",
+      pages: journal.pages || metadata.imprint?.pages || "",
+      doi,
+      publisher: metadata.publisher || "Zenodo",
+      url: record.links?.self_html || record.links?.self_doi_html || record.doi_url || (doi ? `https://doi.org/${doi}` : ""),
+      howpublished: resourceType.title || resourceType.type || "",
+      _source: "zenodo",
+      _zenodo_type: resourceType.type || "",
+    };
+  }
+
+  function extractZenodoDoiFromText(text) {
+    const m = /10\.5281\/zenodo\.\d+(?:\.\d+)?/i.exec(String(text || ""));
+    return m ? m[0].toLowerCase() : "";
+  }
+
+  function zenodoDoiFromEntry(entry = {}) {
+    return extractZenodoDoiFromText([
+      entry.doi,
+      entry.url,
+      entry.howpublished,
+      entry.note,
+    ].filter(Boolean).join(" "));
+  }
+
+  function hasZenodoSignal(entry = {}) {
+    if (!entry) return false;
+    if (zenodoDoiFromEntry(entry)) return true;
+    const text = [
+      entry.publisher,
+      entry.url,
+      entry.howpublished,
+      entry.note,
+      entry.journal,
+      entry.booktitle,
+      entry.organization,
+      entry.institution,
+    ].filter(Boolean).join(" ").toLowerCase();
+    return /\bzenodo\b|zenodo\.org/.test(text);
+  }
+
   function ssToStandard(paper) {
     const authors = (paper.authors || []).map(a => {
       const name = a.name || "";
@@ -1305,6 +1373,10 @@
   exports.compareEntry = compareEntry;
   exports.fieldDiffsForNeedsReview = fieldDiffsForNeedsReview;
   exports.crossrefToStandard = crossrefToStandard;
+  exports.zenodoToStandard = zenodoToStandard;
+  exports.extractZenodoDoiFromText = extractZenodoDoiFromText;
+  exports.zenodoDoiFromEntry = zenodoDoiFromEntry;
+  exports.hasZenodoSignal = hasZenodoSignal;
   exports.ssToStandard = ssToStandard;
   exports.arxivToStandard = arxivToStandard;
   exports.openreviewToStandard = openreviewToStandard;

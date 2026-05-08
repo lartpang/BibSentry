@@ -37,8 +37,8 @@
       paste_first: "Please paste your BibTeX content first.",
       select_source: "Select at least one search source.",
       settings_title: "Search Sources (Tiered)",
-      settings_help: "Layered search: Tier 1 (published records) → Tier 2 (conference proceedings) → Tier 3 (preprints). Published versions are preferred over preprints.",
-      tier1: "Tier 1 — Published Records", tier2: "Tier 2 — Conference Proceedings", tier3: "Tier 3 — Preprints",
+      settings_help: "Layered search: Tier 1 (published records) → Tier 2 (conference proceedings) → Tier 3 (repositories and preprints). Zenodo is queried only when the entry already mentions Zenodo.",
+      tier1: "Tier 1 — Published Records", tier2: "Tier 2 — Conference Proceedings", tier3: "Tier 3 — Repositories & Preprints",
       copy: "Copy", copied: "Copied!",
       toc_title: "Contents",
       clear_field: "Clear field",
@@ -82,8 +82,8 @@
       paste_first: "请先粘贴 BibTeX 内容。",
       select_source: "请至少选择一个检索来源。",
       settings_title: "检索来源（分层）",
-      settings_help: "分层检索：第一层（已出版记录）→ 第二层（会议论文集）→ 第三层（预印本）。优先选择已出版版本。",
-      tier1: "第一层 — 已出版记录", tier2: "第二层 — 会议论文集", tier3: "第三层 — 预印本",
+      settings_help: "分层检索：第一层（已出版记录）→ 第二层（会议论文集）→ 第三层（仓储记录与预印本）。仅当条目已包含 Zenodo 线索时才查询 Zenodo。",
+      tier1: "第一层 — 已出版记录", tier2: "第二层 — 会议论文集", tier3: "第三层 — 仓储记录与预印本",
       copy: "复制", copied: "已复制！",
       toc_title: "目录",
       clear_field: "清空字段",
@@ -283,7 +283,7 @@
       { key: "tier2", engines: [
         { id: "cvf", label: "CVF (CVPR/ICCV/WACV)" }, { id: "openreview", label: "OpenReview" }
       ]},
-      { key: "tier3", engines: [{ id: "arxiv", label: "arXiv" }] }
+      { key: "tier3", engines: [{ id: "zenodo", label: "Zenodo" }, { id: "arxiv", label: "arXiv" }] }
     ];
     let html = "";
     for (const tier of tiers) {
@@ -628,6 +628,7 @@
           '<a class="search-link" href="https://scholar.google.com/scholar?q=' + searchQuery + '" target="_blank" rel="noopener" title="Google Scholar"><span class="search-link-label">G</span></a>' +
           '<a class="search-link" href="https://www.semanticscholar.org/search?q=' + searchQuery + '" target="_blank" rel="noopener" title="Semantic Scholar"><span class="search-link-label">S2</span></a>' +
           '<a class="search-link" href="https://dblp.org/search?q=' + searchQuery + '" target="_blank" rel="noopener" title="DBLP"><span class="search-link-label">D</span></a>' +
+          '<a class="search-link" href="https://zenodo.org/search?q=' + searchQuery + '" target="_blank" rel="noopener" title="Zenodo"><span class="search-link-label">Z</span></a>' +
         '</div>'
       : "";
 
@@ -747,7 +748,7 @@
     const diffFieldSet = new Set((r.field_diffs || []).map(d => d.field));
     const foundEntry = r.found || {};
     const extraFields = Object.keys(foundEntry).filter(f =>
-      !ALL_FIELDS.includes(f) && !["ID","ENTRYTYPE","_source"].includes(f) && (foundEntry[f] || "").toString().trim()
+      !ALL_FIELDS.includes(f) && !["ID","ENTRYTYPE"].includes(f) && !f.startsWith("_") && (foundEntry[f] || "").toString().trim()
     );
     const fields = ALL_FIELDS.concat(extraFields.filter(f => !ALL_FIELDS.includes(f)));
 
@@ -841,7 +842,7 @@
     const ALL_FIELDS = ["title"].concat(B.COMPARED_FIELDS);
     const foundEntry = r.found || {};
     const extraFields = Object.keys(foundEntry).filter(f =>
-      !ALL_FIELDS.includes(f) && !["ID","ENTRYTYPE","_source"].includes(f) && (foundEntry[f] || "").toString().trim()
+      !ALL_FIELDS.includes(f) && !["ID","ENTRYTYPE"].includes(f) && !f.startsWith("_") && (foundEntry[f] || "").toString().trim()
     );
     const fields = ALL_FIELDS.concat(extraFields.filter(f => !ALL_FIELDS.includes(f)));
     populateFvTable(idx, fields, entry, foundEntry, r);

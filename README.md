@@ -35,7 +35,7 @@ Search order:
 |---|---|---|
 | Tier 1 | DBLP, CrossRef, Semantic Scholar | Published records and broad metadata coverage. |
 | Tier 2 | CVF, OpenReview | Conference proceedings when Tier 1 is weak. |
-| Tier 3 | arXiv | Preprint fallback when no stronger match exists. |
+| Tier 3 | Zenodo, arXiv | Repository records and preprint fallback when no stronger match exists. Zenodo is queried only when the original entry already contains Zenodo signals such as a `10.5281/zenodo...` DOI, a Zenodo URL, or `publisher = {Zenodo}`. |
 
 Published conference and journal records are preferred over preprints when the title evidence is comparable.
 

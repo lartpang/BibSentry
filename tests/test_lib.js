@@ -411,6 +411,89 @@ test("handles missing fields gracefully", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+console.log("\n── zenodoToStandard ──");
+
+test("converts Zenodo record to standard format", () => {
+  const result = lib.zenodoToStandard({
+    created: "2024-06-25T13:48:53.539413+00:00",
+    doi: "10.5281/zenodo.12531857",
+    doi_url: "https://doi.org/10.5281/zenodo.12531857",
+    metadata: {
+      title: "Leverage the DataCite REST API for metadata discovery and creation",
+      publication_date: "2024-06-25",
+      creators: [
+        { name: "Stathis, Kelly" },
+        { name: "Rhoads, Joseph" },
+      ],
+      resource_type: { title: "Presentation", type: "presentation" },
+    },
+    links: { self_html: "https://zenodo.org/records/12531857" },
+  });
+
+  assert.strictEqual(result.title, "Leverage the DataCite REST API for metadata discovery and creation");
+  assert.strictEqual(result.author, "Stathis, Kelly and Rhoads, Joseph");
+  assert.strictEqual(result.year, "2024");
+  assert.strictEqual(result.doi, "10.5281/zenodo.12531857");
+  assert.strictEqual(result.publisher, "Zenodo");
+  assert.strictEqual(result.howpublished, "Presentation");
+  assert.strictEqual(result.url, "https://zenodo.org/records/12531857");
+  assert.strictEqual(result._zenodo_type, "presentation");
+  assert.strictEqual(result._source, "zenodo");
+});
+
+test("maps Zenodo journal and meeting metadata", () => {
+  const journal = lib.zenodoToStandard({
+    metadata: {
+      title: "Article Archive",
+      publication_date: "2022",
+      creators: [{ person_or_org: { family_name: "Doe", given_name: "Jane" } }],
+      journal: { title: "Journal of Data", volume: "5", issue: "2", pages: "10-15" },
+      resource_type: { type: "publication", title: "Publication" },
+    },
+  });
+  const meeting = lib.zenodoToStandard({
+    metadata: {
+      title: "Conference Slides",
+      publication_date: "2023-03",
+      meeting: { title: "Example Conference 2023" },
+      resource_type: { type: "presentation", title: "Presentation" },
+    },
+  });
+
+  assert.strictEqual(journal.author, "Doe, Jane");
+  assert.strictEqual(journal.journal, "Journal of Data");
+  assert.strictEqual(journal.volume, "5");
+  assert.strictEqual(journal.number, "2");
+  assert.strictEqual(journal.pages, "10-15");
+  assert.strictEqual(meeting.booktitle, "Example Conference 2023");
+  assert.strictEqual(meeting.journal, "");
+});
+
+test("detects Zenodo signals in BibTeX entries", () => {
+  assert.strictEqual(lib.hasZenodoSignal({
+    publisher: "Zenodo",
+    doi: "10.5281/zenodo.14567787",
+    url: "https://doi.org/10.5281/zenodo.14567787",
+  }), true);
+  assert.strictEqual(lib.hasZenodoSignal({
+    howpublished: "\\url{https://zenodo.org/records/14567787}",
+  }), true);
+  assert.strictEqual(lib.hasZenodoSignal({
+    publisher: "GitHub",
+    doi: "10.1145/1234567",
+    url: "https://example.com/artifact",
+  }), false);
+});
+
+test("extracts Zenodo DOI from common fields", () => {
+  assert.strictEqual(
+    lib.zenodoDoiFromEntry({ url: "https://doi.org/10.5281/zenodo.14567787" }),
+    "10.5281/zenodo.14567787"
+  );
+  assert.strictEqual(lib.extractZenodoDoiFromText("doi:10.5281/zenodo.12531857"), "10.5281/zenodo.12531857");
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 console.log("\n── ssToStandard ──");
 
 test("converts Semantic Scholar response to standard format", () => {

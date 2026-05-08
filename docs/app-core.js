@@ -4,18 +4,18 @@
   const CROSSREF_API="https://api.crossref.org/works",SS_MATCH="https://api.semanticscholar.org/graph/v1/paper/search/match",
     SS_SEARCH="https://api.semanticscholar.org/graph/v1/paper/search",SS_FIELDS="title,authors,year,venue,publicationVenue,externalIds",
     DBLP_API="https://dblp.org/search/pub/api",ARXIV_API="https://export.arxiv.org/api/query",
-    OR_API="https://api2.openreview.net",MAX_RETRIES=2,RETRY_MS=800,FETCH_TIMEOUT=8000;
+    OR_API="https://api2.openreview.net",ZENODO_API="https://zenodo.org/api/records",MAX_RETRIES=2,RETRY_MS=800,FETCH_TIMEOUT=8000;
 
-  const rS={ssD:300,crD:80,dblpD:200,arxivD:200,orD:300,cvfD:500,
-    ssMn:200,ssMx:2000,crMn:50,crMx:1500,dblpMn:150,dblpMx:1500,arxivMn:150,arxivMx:1500,orMn:300,orMx:2000,cvfMn:300,cvfMx:3000,
-    lSS:0,lCR:0,lDBLP:0,lArx:0,lOR:0,lCVF:0,ssOk:0,crOk:0,dblpOk:0,arxivOk:0,orOk:0,cvfOk:0};
+  const rS={ssD:300,crD:80,dblpD:200,arxivD:200,orD:300,cvfD:500,zenodoD:250,
+    ssMn:200,ssMx:2000,crMn:50,crMx:1500,dblpMn:150,dblpMx:1500,arxivMn:150,arxivMx:1500,orMn:300,orMx:2000,cvfMn:300,cvfMx:3000,zenodoMn:150,zenodoMx:2000,
+    lSS:0,lCR:0,lDBLP:0,lArx:0,lOR:0,lCVF:0,lZenodo:0,ssOk:0,crOk:0,dblpOk:0,arxivOk:0,orOk:0,cvfOk:0,zenodoOk:0};
   const rK={ss:{d:"ssD",mx:"ssMx",mn:"ssMn",ok:"ssOk",l:"lSS"},cr:{d:"crD",mx:"crMx",mn:"crMn",ok:"crOk",l:"lCR"},
     dblp:{d:"dblpD",mx:"dblpMx",mn:"dblpMn",ok:"dblpOk",l:"lDBLP"},arxiv:{d:"arxivD",mx:"arxivMx",mn:"arxivMn",ok:"arxivOk",l:"lArx"},
-    or:{d:"orD",mx:"orMx",mn:"orMn",ok:"orOk",l:"lOR"},cvf:{d:"cvfD",mx:"cvfMx",mn:"cvfMn",ok:"cvfOk",l:"lCVF"}};
+    or:{d:"orD",mx:"orMx",mn:"orMn",ok:"orOk",l:"lOR"},cvf:{d:"cvfD",mx:"cvfMx",mn:"cvfMn",ok:"cvfOk",l:"lCVF"},zenodo:{d:"zenodoD",mx:"zenodoMx",mn:"zenodoMn",ok:"zenodoOk",l:"lZenodo"}};
   function rBack(s){const k=rK[s];if(!k)return;rS[k.d]=Math.min(rS[k.d]*1.3,rS[k.mx]);rS[k.ok]=0;}
   function rSucc(s){const k=rK[s];if(!k)return;rS[k.ok]++;if(rS[k.ok]>=2){rS[k.d]=Math.max(rS[k.d]*0.85,rS[k.mn]);rS[k.ok]=0;}}
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-  function gS(u){if(u.includes("semanticscholar.org"))return"ss";if(u.includes("crossref.org"))return"cr";if(u.includes("dblp.org"))return"dblp";if(u.includes("arxiv.org"))return"arxiv";if(u.includes("openreview.net"))return"or";if(u.includes("thecvf.com")||u.includes("ecva.net"))return"cvf";return"cr";}
+  function gS(u){if(u.includes("semanticscholar.org"))return"ss";if(u.includes("crossref.org"))return"cr";if(u.includes("dblp.org"))return"dblp";if(u.includes("arxiv.org"))return"arxiv";if(u.includes("openreview.net"))return"or";if(u.includes("thecvf.com")||u.includes("ecva.net"))return"cvf";if(u.includes("zenodo.org"))return"zenodo";return"cr";}
 
   let _authErrCb=null;
 
@@ -39,6 +39,11 @@
   async function searchSSSearch(t,h){const d=await rF(bU(SS_SEARCH,{query:t,limit:"5",fields:SS_FIELDS}),{headers:h});return(d?.data||[]).map(B.ssToStandard);}
   async function searchCrossref(t){const d=await rF(bU(CROSSREF_API,{"query.title":t,rows:"5",select:"title,author,published-print,published-online,published,issued,container-title,group-title,event,volume,issue,page,DOI,publisher,URL,type,ISSN,ISBN"}));return(d?.message?.items||[]).map(B.crossrefToStandard);}
   async function searchDBLP(t){const d=await rF(bU(DBLP_API,{q:t,format:"json",h:"5"}));const h=d?.result?.hits?.hit;if(!h)return[];return(Array.isArray(h)?h:[h]).map(x=>B.dblpToStandard(x.info)).filter(Boolean);}
+  async function searchZenodo(t,e){
+    const zd=B.zenodoDoiFromEntry?B.zenodoDoiFromEntry(e):"";
+    const q=zd?`doi:"${zd}"`:`title:"${t.replace(/"/g," ")}"`;
+    const d=await rF(bU(ZENODO_API,{q,size:"5",sort:"bestmatch"}));
+    return(d?.hits?.hits||[]).map(B.zenodoToStandard).filter(p=>p.title);}
   async function searchArxiv(t){
     const xml=await rF(bU(ARXIV_API,{search_query:`ti:"${t}"`,start:"0",max_results:"5",sortBy:"relevance",sortOrder:"descending"}),{txt:true});
     if(!xml)return[];const papers=[],eR=/<entry>([\s\S]*?)<\/entry>/g;let em;
@@ -95,12 +100,16 @@
       const t2HasMatch=!!B.bestMatch(t2,ct);
       if(t2HasMatch)logFn("success",`Found T2: ${(B.bestMatch(t2,ct)?.title||"").slice(0,50)}`);}
 
-    // ── Tier 3: ArXiv — only if no confident match yet ────────────────
-    if(enabled.has("arxiv")&&!B.bestMatch(allCandidates,ct)){
-      logFn("query",`T3 ArXiv: ${ct.slice(0,55)}`);
-      const ar=await searchArxiv(ct).catch(()=>[]);
-      addCandidates(ar);
-      const ab=B.bestMatch(ar,ct);if(ab)logFn("success",`ArXiv: ${(ab.title||"").slice(0,50)}`);}
+    // ── Tier 3: repositories + preprints, only if no confident match yet ──
+    if(!B.bestMatch(allCandidates,ct)){
+      const t3Tasks=[];
+      if(enabled.has("zenodo")&&B.hasZenodoSignal&&B.hasZenodoSignal(entry))t3Tasks.push(searchZenodo(ct,entry).then(r=>{logFn("query",`T3 Zenodo: ${ct.slice(0,55)}`);return r;}).catch(()=>[]));
+      if(enabled.has("arxiv"))t3Tasks.push(searchArxiv(ct).then(r=>{logFn("query",`T3 ArXiv: ${ct.slice(0,55)}`);return r;}).catch(()=>[]));
+      if(t3Tasks.length){
+        const t3=(await Promise.all(t3Tasks)).flat();
+        addCandidates(t3);
+        const ab=B.bestMatch(t3,ct);if(ab)logFn("success",`T3: ${(ab.title||"").slice(0,50)}`);}
+    }
 
     return finalize();}
 
