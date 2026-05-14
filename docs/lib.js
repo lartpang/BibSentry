@@ -627,6 +627,29 @@
     return /^10\.48550\/arxiv\./i.test(String(doi || "").trim());
   }
 
+  function normalizeDoi(doi) {
+    return String(doi || "")
+      .trim()
+      .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
+      .replace(/^doi\s*:\s*/i, "")
+      .replace(/[}\]\)\s.,;]+$/g, "")
+      .toLowerCase();
+  }
+
+  function extractDoiFromText(text) {
+    const m = /10\.\d{4,9}\/[^\s{}"<>]+/i.exec(String(text || ""));
+    return m ? normalizeDoi(m[0]) : "";
+  }
+
+  function doiFromEntry(entry = {}) {
+    if (entry.doi) return normalizeDoi(entry.doi);
+    return extractDoiFromText([
+      entry.url,
+      entry.howpublished,
+      entry.note,
+    ].filter(Boolean).join(" "));
+  }
+
   function normalizeArxivId(id) {
     return String(id || "")
       .trim()
@@ -1400,6 +1423,9 @@
   exports.preferredVenueField = preferredVenueField;
   exports.adaptCandidateToEntryFields = adaptCandidateToEntryFields;
   exports.isArxivDoi = isArxivDoi;
+  exports.normalizeDoi = normalizeDoi;
+  exports.extractDoiFromText = extractDoiFromText;
+  exports.doiFromEntry = doiFromEntry;
   exports.isArxivCandidate = isArxivCandidate;
   exports.normalizeArxivId = normalizeArxivId;
   exports.extractArxivIdFromText = extractArxivIdFromText;

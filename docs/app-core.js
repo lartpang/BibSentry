@@ -2,7 +2,7 @@
   "use strict";
   const B = window.BibLib;
   const CROSSREF_API="https://api.crossref.org/works",SS_MATCH="https://api.semanticscholar.org/graph/v1/paper/search/match",
-    SS_SEARCH="https://api.semanticscholar.org/graph/v1/paper/search",SS_FIELDS="title,authors,year,venue,publicationVenue,externalIds",
+    SS_SEARCH="https://api.semanticscholar.org/graph/v1/paper/search",SS_PAPER="https://api.semanticscholar.org/graph/v1/paper",SS_FIELDS="title,authors,year,venue,publicationVenue,externalIds",
     DBLP_API="https://dblp.org/search/pub/api",ARXIV_API="https://export.arxiv.org/api/query",
     OR_API="https://api2.openreview.net",ZENODO_API="https://zenodo.org/api/records",MAX_RETRIES=2,RETRY_MS=800,FETCH_TIMEOUT=8000;
 
@@ -36,21 +36,29 @@
   function bU(b,p){const u=new URL(b);for(const[k,v]of Object.entries(p))u.searchParams.set(k,v);return u.toString();}
 
   async function searchSSMatch(t,h){const d=await rF(bU(SS_MATCH,{query:t,fields:SS_FIELDS}),{is404:true,headers:h});if(!d?.data?.[0])return null;return B.ssToStandard(d.data[0]);}
+  async function searchSSByDoi(doi,h){const d=await rF(bU(`${SS_PAPER}/${encodeURIComponent(`DOI:${doi}`)}`,{fields:SS_FIELDS}),{is404:true,headers:h});return d?[B.ssToStandard(d)]:[];}
   async function searchSSSearch(t,h){const d=await rF(bU(SS_SEARCH,{query:t,limit:"5",fields:SS_FIELDS}),{headers:h});return(d?.data||[]).map(B.ssToStandard);}
   async function searchCrossref(t){const d=await rF(bU(CROSSREF_API,{"query.title":t,rows:"5",select:"title,author,published-print,published-online,published,issued,container-title,group-title,event,volume,issue,page,DOI,publisher,URL,type,ISSN,ISBN"}));return(d?.message?.items||[]).map(B.crossrefToStandard);}
+  async function searchCrossrefDoi(doi){const d=await rF(`${CROSSREF_API}/${encodeURIComponent(doi)}`);return d?.message?[B.crossrefToStandard(d.message)]:[];}
   async function searchDBLP(t){const d=await rF(bU(DBLP_API,{q:t,format:"json",h:"5"}));const h=d?.result?.hits?.hit;if(!h)return[];return(Array.isArray(h)?h:[h]).map(x=>B.dblpToStandard(x.info)).filter(Boolean);}
   async function searchZenodo(t,e){
     const zd=B.zenodoDoiFromEntry?B.zenodoDoiFromEntry(e):"";
     const q=zd?`doi:"${zd}"`:`title:"${t.replace(/"/g," ")}"`;
     const d=await rF(bU(ZENODO_API,{q,size:"5",sort:"bestmatch"}));
     return(d?.hits?.hits||[]).map(B.zenodoToStandard).filter(p=>p.title);}
-  async function searchArxiv(t){
-    const xml=await rF(bU(ARXIV_API,{search_query:`ti:"${t}"`,start:"0",max_results:"5",sortBy:"relevance",sortOrder:"descending"}),{txt:true});
+  function parseArxivXml(xml){
     if(!xml)return[];const papers=[],eR=/<entry>([\s\S]*?)<\/entry>/g;let em;
     while((em=eR.exec(xml))!==null){const ex=em[1],tM=/<title[^>]*>([\s\S]*?)<\/title>/i.exec(ex),iM=/<id>([\s\S]*?)<\/id>/i.exec(ex),pM=/<published>([\s\S]*?)<\/published>/i.exec(ex);
       const aR=/<author>\s*<name>([\s\S]*?)<\/name>\s*<\/author>/g,auths=[];let am;while((am=aR.exec(ex))!==null)auths.push(am[1].trim());
       const aid=(iM?.[1]||"").replace(/^https?:\/\/arxiv\.org\/abs\//i,"").replace(/v\d+$/i,""),pt=(tM?.[1]||"").replace(/\s+/g," ").trim(),yr=pM?pM[1].slice(0,4):"";
       papers.push({title:pt,author:auths.map(n=>{const p=n.split(/\s+/).filter(Boolean);return p.length>=2?`${p[p.length-1]}, ${p.slice(0,-1).join(" ")}`:n;}).join(" and "),year:yr,journal:aid?`arXiv preprint arXiv:${aid}`:"arXiv preprint",volume:"",number:"",pages:"",doi:aid?`10.48550/arXiv.${aid}`:"",publisher:"",url:aid?`https://arxiv.org/abs/${aid}`:(iM?.[1]||""),_source:"arxiv"});}return papers;}
+  async function searchArxivById(id){
+    if(!id)return[];
+    const xml=await rF(bU(ARXIV_API,{id_list:id,start:"0",max_results:"1"}),{txt:true});
+    return parseArxivXml(xml);}
+  async function searchArxiv(t){
+    const xml=await rF(bU(ARXIV_API,{search_query:`ti:"${t}"`,start:"0",max_results:"5",sortBy:"relevance",sortOrder:"descending"}),{txt:true});
+    return parseArxivXml(xml);}
   async function searchOR(t){try{const d=await rF(bU(`${OR_API}/notes`,{"content.title":t,limit:"5",details:"replies"}));return(d?.notes||[]).map(n=>B.openreviewToStandard(n)).filter(p=>p.title);}catch{return[];}}
   async function searchCVF(e){const ci=B.cvfConfFromEntry(e);if(!ci)return[];try{const h=await rF(ci.url,{txt:true});return h?B.cvfPageToCandidates(h,ci):[];}catch{return[];}}
 
@@ -100,11 +108,31 @@
       const t2HasMatch=!!B.bestMatch(t2,ct);
       if(t2HasMatch)logFn("success",`Found T2: ${(B.bestMatch(t2,ct)?.title||"").slice(0,50)}`);}
 
-    // ── Tier 3: repositories + preprints, only if no confident match yet ──
-    if(!B.bestMatch(allCandidates,ct)){
+    if(!hasStrongPublished(allCandidates,ct)){
+      const doi=B.doiFromEntry?B.doiFromEntry(entry):"";
+      const idTasks=[];
+      if(doi&&!B.isArxivDoi(doi)){
+        if(enabled.has("crossref"))idTasks.push(searchCrossrefDoi(doi).then(r=>{logFn("query",`ID CrossRef DOI: ${doi}`);return r;}).catch(()=>[]));
+        if(enabled.has("semantic_scholar"))idTasks.push(searchSSByDoi(doi,ssH).then(r=>{logFn("query",`ID S2 DOI: ${doi}`);return r;}).catch(()=>[]));
+      }
+      if(idTasks.length){
+        const idResults=(await Promise.all(idTasks)).flat();
+        addCandidates(idResults);
+        if(hasStrongPublished(allCandidates,ct)){
+          logFn("success",`Published ID: ${(rankCandidates(entry,ct,allCandidates)[0]?.title||"").slice(0,50)}`);
+          return finalize();}
+      }
+    }
+
+    // ── Tier 3: repositories + preprints, only if no strong published match yet ──
+    if(!hasStrongPublished(allCandidates,ct)){
       const t3Tasks=[];
       if(enabled.has("zenodo")&&B.hasZenodoSignal&&B.hasZenodoSignal(entry))t3Tasks.push(searchZenodo(ct,entry).then(r=>{logFn("query",`T3 Zenodo: ${ct.slice(0,55)}`);return r;}).catch(()=>[]));
-      if(enabled.has("arxiv"))t3Tasks.push(searchArxiv(ct).then(r=>{logFn("query",`T3 ArXiv: ${ct.slice(0,55)}`);return r;}).catch(()=>[]));
+      if(enabled.has("arxiv")){
+        const arxivId=B.arxivIdFromEntry?B.arxivIdFromEntry(entry):"";
+        if(arxivId)t3Tasks.push(searchArxivById(arxivId).then(r=>{logFn("query",`T3 arXiv ID: ${arxivId}`);return r;}).catch(()=>[]));
+        else t3Tasks.push(searchArxiv(ct).then(r=>{logFn("query",`T3 arXiv title: ${ct.slice(0,55)}`);return r;}).catch(()=>[]));
+      }
       if(t3Tasks.length){
         const t3=(await Promise.all(t3Tasks)).flat();
         addCandidates(t3);

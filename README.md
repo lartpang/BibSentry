@@ -123,7 +123,7 @@ Semantic Scholar API keys stay in page memory by default. If `Remember on this b
 ## Current Limits
 
 - Lookup is primarily title-based fuzzy matching.
-- Exact DOI lookup and exact arXiv ID lookup are planned.
+- Exact DOI and arXiv ID fallback lookup is used after published-record sources do not produce a strong match.
 - Public APIs can rate-limit requests, so large files can take several minutes.
 - Metadata from public sources can be incomplete or inconsistent.
 

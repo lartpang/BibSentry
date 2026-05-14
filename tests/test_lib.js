@@ -557,6 +557,28 @@ test("prefers publicationVenue.name over venue string", () => {
   assert.strictEqual(result.journal, "Full Venue Name");
 });
 
+test("extracts arXiv ID from eprint and DOI fields", () => {
+  assert.strictEqual(
+    lib.arxivIdFromEntry({ eprinttype: "arXiv", eprint: "2508.10104" }),
+    "2508.10104"
+  );
+  assert.strictEqual(
+    lib.arxivIdFromEntry({ doi: "10.48550/ARXIV.2508.10104" }),
+    "2508.10104"
+  );
+});
+
+test("extracts generic DOI from DOI field and URL", () => {
+  assert.strictEqual(
+    lib.doiFromEntry({ doi: "https://doi.org/10.1145/1234567." }),
+    "10.1145/1234567"
+  );
+  assert.strictEqual(
+    lib.doiFromEntry({ url: "https://doi.org/10.48550/arXiv.2508.10104" }),
+    "10.48550/arxiv.2508.10104"
+  );
+});
+
 // ═══════════════════════════════════════════════════════════════════════
 console.log("\n── extractLastNames ──");
 
