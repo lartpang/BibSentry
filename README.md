@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="BibSentry logo" width="160" />
+</p>
+
 # BibSentry
 
 BibSentry is a browser-based tool for checking and correcting `.bib` files. It parses entries locally, searches selected academic sources, shows what changed, and exports a reviewed BibTeX file.
