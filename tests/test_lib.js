@@ -271,6 +271,18 @@ test("doi comparison is exact and case-insensitive", () => {
   assert.strictEqual(lib.compareField("doi", "10.1234/abc", "10.1234/ABC"), 100);
 });
 
+test("field comparison ignores protective braces and case", () => {
+  assert.strictEqual(lib.compareField("doi", "{10.1234/ABC}", "10.1234/abc"), 100);
+  assert.strictEqual(lib.compareField("journal", "Proceedings of the {IEEE}", "proceedings of the IEEE"), 100);
+  assert.strictEqual(lib.compareField("booktitle", "Proceedings of {CVPR}", "proceedings of CVPR"), 100);
+});
+
+test("format-insensitive fields share one equivalence rule", () => {
+  assert.strictEqual(lib.fieldValuesEquivalent("url", "\\url{HTTPS://EXAMPLE.COM/PAPER}", "https://example.com/paper"), true);
+  assert.strictEqual(lib.fieldValuesEquivalent("booktitle", "Proceedings of {NeurIPS}", "proceedings of neurips"), true);
+  assert.strictEqual(lib.fieldValuesEquivalent("customfield", "{ABC}", "abc"), false);
+});
+
 test("pages with different dashes match", () => {
   assert.strictEqual(lib.compareField("pages", "1--10", "1-10"), 100);
 });
@@ -310,6 +322,26 @@ test("enrichments don't cause updated status", () => {
   const result = lib.compareEntry(orig, found);
   assert.strictEqual(result.status, "verified");
   assert.ok(result.field_diffs.some(d => d.field === "doi"), "should report doi enrichment");
+});
+
+test("verified when DOI and journal only differ by braces or case", () => {
+  const orig = {
+    title: "Test Paper",
+    year: "2023",
+    journal: "Proceedings of the {IEEE}",
+    booktitle: "Proceedings of {CVPR}",
+    doi: "{10.1234/ABC}",
+  };
+  const found = {
+    title: "Test Paper",
+    year: "2023",
+    journal: "proceedings of the IEEE",
+    booktitle: "proceedings of cvpr",
+    doi: "10.1234/abc",
+  };
+  const result = lib.compareEntry(orig, found);
+  assert.strictEqual(result.status, "verified");
+  assert.ok(!result.field_diffs.some(d => d.field === "journal" || d.field === "booktitle" || d.field === "doi"));
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -636,6 +668,13 @@ test("COMPARED_FIELDS contains expected fields", () => {
   assert.ok(lib.COMPARED_FIELDS.includes("author"));
   assert.ok(lib.COMPARED_FIELDS.includes("year"));
   assert.ok(lib.COMPARED_FIELDS.includes("doi"));
+});
+
+test("FORMAT_INSENSITIVE_FIELDS contains common string fields", () => {
+  assert.ok(lib.FORMAT_INSENSITIVE_FIELDS.includes("doi"));
+  assert.ok(lib.FORMAT_INSENSITIVE_FIELDS.includes("journal"));
+  assert.ok(lib.FORMAT_INSENSITIVE_FIELDS.includes("booktitle"));
+  assert.ok(lib.FORMAT_INSENSITIVE_FIELDS.includes("url"));
 });
 
 // ═══════════════════════════════════════════════════════════════════════

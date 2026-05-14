@@ -1,5 +1,5 @@
 /*
- * BibLib — pure logic functions for BibTeX Verifier.
+ * BibLib — pure logic functions for BibSentry.
  * Works as a browser global (window.BibLib) and as a Node.js module.
  */
 (function (exports) {
@@ -12,6 +12,14 @@
     "author", "year", "journal", "booktitle",
     "volume", "number", "pages", "doi", "publisher",
   ];
+  const FORMAT_INSENSITIVE_FIELDS = [
+    ...COMPARED_FIELDS,
+    "title", "url", "doi_url", "howpublished", "note", "series",
+    "school", "institution", "organization", "address", "edition",
+    "type", "month", "issn", "isbn", "eprint", "archiveprefix",
+    "primaryclass", "archive", "urldate",
+  ];
+  const FORMAT_INSENSITIVE_FIELD_SET = new Set(FORMAT_INSENSITIVE_FIELDS);
 
   const DEFAULT_CONFIG = {
     thresholds: {
@@ -49,6 +57,14 @@
 
   function normalizeTitle(title) {
     return stripLatex(title).toLowerCase().trim();
+  }
+
+  function normalizeFieldName(field) {
+    return String(field || "").toLowerCase();
+  }
+
+  function isFormatInsensitiveField(field) {
+    return FORMAT_INSENSITIVE_FIELD_SET.has(normalizeFieldName(field));
   }
 
   // ─── BibTeX parser / serializer ──────────────────────────────────────
@@ -527,7 +543,7 @@
   // ─── Normalization helpers ───────────────────────────────────────────
   function normalizeText(text) {
     if (!text) return "";
-    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    return stripLatex(String(text)).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .toLowerCase().trim().replace(/\s+/g, " ");
   }
 
@@ -558,13 +574,27 @@
   }
 
   function compareField(field, a, b) {
+    const fieldName = normalizeFieldName(field);
     const na = normalizeText(a), nb = normalizeText(b);
     if (!na && !nb) return 100;
     if (!na || !nb) return 0;
-    if (field === "year" || field === "doi") return na === nb ? 100 : 0;
-    if (field === "author") return compareAuthors(a, b);
-    if (field === "pages") return normalizePages(na) === normalizePages(nb) ? 100 : tokenSortRatio(na, nb);
+    if (fieldName === "year" || fieldName === "doi") return na === nb ? 100 : 0;
+    if (fieldName === "author") return compareAuthors(a, b);
+    if (fieldName === "pages") return normalizePages(na) === normalizePages(nb) ? 100 : tokenSortRatio(na, nb);
     return tokenSortRatio(na, nb);
+  }
+
+  function fieldValuesEquivalent(field, a, b) {
+    const fieldName = normalizeFieldName(field);
+    const va = String(a || "");
+    const vb = String(b || "");
+    if (!va.trim() && !vb.trim()) return true;
+    if (!va.trim() || !vb.trim()) return false;
+    if (fieldName === "title") return normalizeTitle(va) === normalizeTitle(vb);
+    if (!isFormatInsensitiveField(fieldName)) return va.trim() === vb.trim();
+    if (fieldName === "author") return compareAuthors(va, vb) === 100;
+    if (fieldName === "pages") return normalizePages(normalizeText(va)) === normalizePages(normalizeText(vb));
+    return normalizeText(va) === normalizeText(vb);
   }
 
   function preferredVenueField(entry) {
@@ -1345,10 +1375,13 @@
   exports.TITLE_MATCH_THRESHOLD = TITLE_MATCH_THRESHOLD;
   exports.MIN_TITLE_SIM = MIN_TITLE_SIM;
   exports.COMPARED_FIELDS = COMPARED_FIELDS;
+  exports.FORMAT_INSENSITIVE_FIELDS = FORMAT_INSENSITIVE_FIELDS;
   exports.DEFAULT_CONFIG = DEFAULT_CONFIG;
 
   exports.stripLatex = stripLatex;
   exports.normalizeTitle = normalizeTitle;
+  exports.normalizeFieldName = normalizeFieldName;
+  exports.isFormatInsensitiveField = isFormatInsensitiveField;
   exports.parseBibDocument = parseBibDocument;
   exports.resolveBibValue = resolveBibValue;
   exports.expandParsedFieldValue = expandParsedFieldValue;
@@ -1363,6 +1396,7 @@
   exports.normalizePages = normalizePages;
   exports.compareAuthors = compareAuthors;
   exports.compareField = compareField;
+  exports.fieldValuesEquivalent = fieldValuesEquivalent;
   exports.preferredVenueField = preferredVenueField;
   exports.adaptCandidateToEntryFields = adaptCandidateToEntryFields;
   exports.isArxivDoi = isArxivDoi;

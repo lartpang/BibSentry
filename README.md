@@ -1,16 +1,18 @@
-# BibTeX Verifier
+# BibSentry
 
-BibTeX Verifier is a browser-based tool for checking and correcting `.bib` files. It parses entries locally, searches selected academic sources, shows what changed, and exports a reviewed BibTeX file.
+BibSentry is a browser-based tool for checking and correcting `.bib` files. It parses entries locally, searches selected academic sources, shows what changed, and exports a reviewed BibTeX file.
 
-[Live app](https://lartpang.github.io/Bibtex-Verifier/) | [MIT License](LICENSE) | [Notice](NOTICE)
+[Live app](https://lartpang.github.io/BibSentry) | [MIT License](LICENSE) | [Notice](NOTICE)
 
 ## Acknowledgement And Inspiration
 
 This project builds on the original [merfanian/Bibtex-Verifier](https://github.com/merfanian/Bibtex-Verifier). The original project provided the browser-based verification foundation: static GitHub Pages deployment, BibTeX parsing, CrossRef/Semantic Scholar checks, result cards, and export flow.
 
+The project has been renamed to `BibSentry` to distinguish it from the original project, because its core functionality, verification strategy, and UI design have been substantially rewritten. The original project remains an important source of inspiration and the creative starting point for this work.
+
 This fork keeps that foundation and focuses on a broader verification workflow: stricter parsing, tiered multi-source lookup, candidate ranking, bilingual UI, parsed-first verification, activity logging, pause/resume control, collapsed review cards, stable review ordering, four-view field editing, right-side navigation, privacy controls, and reviewed export.
 
-The original MIT license and copyright notice are preserved in [LICENSE](LICENSE). Additional attribution is recorded in [NOTICE](NOTICE).
+The original MIT license and copyright notice are preserved in [LICENSE](LICENSE). Additional attribution is recorded in [NOTICE](NOTICE). Many thanks again to the original author for the inspiration and the foundation that made this project possible.
 
 ## Main Workflow
 
@@ -31,11 +33,11 @@ Use the gear button in the floating toolbar to choose search sources and optiona
 
 Search order:
 
-| Tier | Sources | Purpose |
-|---|---|---|
-| Tier 1 | DBLP, CrossRef, Semantic Scholar | Published records and broad metadata coverage. |
-| Tier 2 | CVF, OpenReview | Conference proceedings when Tier 1 is weak. |
-| Tier 3 | Zenodo, arXiv | Repository records and preprint fallback when no stronger match exists. Zenodo is queried only when the original entry already contains Zenodo signals such as a `10.5281/zenodo...` DOI, a Zenodo URL, or `publisher = {Zenodo}`. |
+| Tier   | Sources                          | Purpose                                                                                                                                                                                                                            |
+| ------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tier 1 | DBLP, CrossRef, Semantic Scholar | Published records and broad metadata coverage.                                                                                                                                                                                     |
+| Tier 2 | CVF, OpenReview                  | Conference proceedings when Tier 1 is weak.                                                                                                                                                                                        |
+| Tier 3 | Zenodo, arXiv                    | Repository records and preprint fallback when no stronger match exists. Zenodo is queried only when the original entry already contains Zenodo signals such as a `10.5281/zenodo...` DOI, a Zenodo URL, or `publisher = {Zenodo}`. |
 
 Published conference and journal records are preferred over preprints when the title evidence is comparable.
 
@@ -54,14 +56,14 @@ During verification:
 
 Use the status badges to filter the result list.
 
-| Status | Meaning |
-|---|---|
-| Parsed | Parsed successfully, waiting for verification. |
-| Verified | The selected candidate matches closely. |
+| Status       | Meaning                                                                                                                                               |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parsed       | Parsed successfully, waiting for verification.                                                                                                        |
+| Verified     | The selected candidate matches closely.                                                                                                               |
 | Needs Update | The entry should be checked before export. This includes metadata enrichments, normalized values, and uncertain candidates that need manual judgment. |
-| Not Found | No enabled source produced a credible match. |
-| Duplicates | Another entry has the same normalized title. |
-| Error | Parsing produced a blocking diagnostic. |
+| Not Found    | No enabled source produced a credible match.                                                                                                          |
+| Duplicates   | Another entry has the same normalized title.                                                                                                          |
+| Error        | Parsing produced a blocking diagnostic.                                                                                                               |
 
 `Needs Update` entries are appended to the bottom of the result list in verification order, so you can inspect them from top to bottom in the same order they were found. After verification, editing, candidate changes, filtering, and language switching preserve that order.
 
@@ -80,12 +82,12 @@ Supported actions:
 
 `Needs Update` cards use a four-view editor.
 
-| View | Action |
-|---|---|
-| Original | Click a field value to restore your original value. |
-| Found | Click a field value to adopt the selected candidate value. |
-| Edit | Type directly to customize the exported value. |
-| Diff | Inspect the before/after BibTeX diff. |
+| View     | Action                                                     |
+| -------- | ---------------------------------------------------------- |
+| Original | Click a field value to restore your original value.        |
+| Found    | Click a field value to adopt the selected candidate value. |
+| Edit     | Type directly to customize the exported value.             |
+| Diff     | Inspect the before/after BibTeX diff.                      |
 
 The header refresh icon adopts all found values for that entry. The clear button empties a field; empty fields are omitted from export.
 
@@ -140,14 +142,14 @@ node --check docs/app.js
 
 ## Project Layout
 
-| Path | Purpose |
-|---|---|
-| `docs/index.html` | Static page markup and floating controls. |
-| `docs/style.css` | App layout, cards, editor, floating toolbar, and navigation styles. |
-| `docs/app-core.js` | Source lookup, tiered search, rate limiting, and API-key callback. |
-| `docs/app.js` | Parsing workflow, verification queue, cards, editing, filters, and export. |
-| `docs/lib.js` | Parsing, normalization, comparison, ranking, and serialization. |
-| `tests/test_lib.js` | Node tests for pure logic. |
+| Path                | Purpose                                                                    |
+| ------------------- | -------------------------------------------------------------------------- |
+| `docs/index.html`   | Static page markup and floating controls.                                  |
+| `docs/style.css`    | App layout, cards, editor, floating toolbar, and navigation styles.        |
+| `docs/app-core.js`  | Source lookup, tiered search, rate limiting, and API-key callback.         |
+| `docs/app.js`       | Parsing workflow, verification queue, cards, editing, filters, and export. |
+| `docs/lib.js`       | Parsing, normalization, comparison, ranking, and serialization.            |
+| `tests/test_lib.js` | Node tests for pure logic.                                                 |
 
 ## License
 

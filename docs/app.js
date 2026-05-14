@@ -177,6 +177,20 @@
     return r.status === filter;
   }
 
+  function filteredOrderedResults(filter = activeFilter) {
+    return cardOrder.map(idx => results[idx]).filter(r => r && filterMatchesResult(r, filter));
+  }
+
+  function updateCardPositionMarkers(items = filteredOrderedResults()) {
+    const total = items.length;
+    items.forEach((r, i) => {
+      const el = document.querySelector('#card-' + r.index + ' .entry-list-position');
+      if (!el) return;
+      el.textContent = '[' + (i + 1) + '/' + total + ']';
+      el.title = (i + 1) + ' / ' + total;
+    });
+  }
+
   // ─── TOC sidebar ───────────────────────────────────────────────────────
   const tocSidebar  = $("#toc-sidebar");
   const tocOpenBtn  = $("#toc-open-btn");
@@ -186,9 +200,9 @@
   let tocObserver   = null;
 
   function rebuildToc() {
+    const items = filteredOrderedResults();
+    updateCardPositionMarkers(items);
     if (!tocBody) return;
-    // collect visible entries
-    const items = cardOrder.map(idx => results[idx]).filter(r => r && filterMatchesResult(r, activeFilter));
     tocBody.innerHTML = "";
     if (!items.length) { hideToc(); return; }
     items.forEach((r, i) => {
@@ -563,6 +577,7 @@
     const card = buildCardElement(r);
     entryList.appendChild(card);
     hydrateExpandedCard(r);
+    updateCardPositionMarkers();
   }
 
   function replaceCard(idx, opts = {}) {
@@ -580,6 +595,7 @@
       entryList.appendChild(card);
     }
     hydrateExpandedCard(r);
+    updateCardPositionMarkers();
   }
 
   function applyFilterToCard(card, r) {
@@ -592,6 +608,7 @@
       if (!r) return;
       card.classList.toggle("hidden", !filterMatchesResult(r, activeFilter));
     });
+    updateCardPositionMarkers();
   }
 
   function buildDiffRow(d, idx, r) {
@@ -633,7 +650,8 @@
       : "";
 
     const collapseIcon = '<span class="entry-collapse-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>';
-    const headerHTML = '<div class="entry-header" role="button" tabindex="0" aria-expanded="false" data-entry-toggle="' + idx + '"><div class="entry-header-main">' + collapseIcon + '<div class="entry-header-text"><div class="entry-title">' + esc(r.title || t("no_title")) + '</div><div class="entry-meta">' + esc(r.entry_id) + ' &middot; ' + esc(r.entry_type) + '</div></div></div><div class="entry-header-aside">' + searchLinksHTML + '<div class="entry-tags">' + (r.duplicate_of ? '<span class="status-tag tag-duplicate">' + t("status_duplicate") + '</span>' : "") + '<span class="status-tag tag-' + escAttr(r.status) + '">' + statusLabel(r.status) + '</span></div></div></div>';
+    const positionHTML = '<span class="entry-list-position" data-entry-position="' + idx + '"></span>';
+    const headerHTML = '<div class="entry-header" role="button" tabindex="0" aria-expanded="false" data-entry-toggle="' + idx + '"><div class="entry-header-main">' + collapseIcon + positionHTML + '<div class="entry-header-text"><div class="entry-title">' + esc(r.title || t("no_title")) + '</div><div class="entry-meta">' + esc(r.entry_id) + ' &middot; ' + esc(r.entry_type) + '</div></div></div><div class="entry-header-aside">' + searchLinksHTML + '<div class="entry-tags">' + (r.duplicate_of ? '<span class="status-tag tag-duplicate">' + t("status_duplicate") + '</span>' : "") + '<span class="status-tag tag-' + escAttr(r.status) + '">' + statusLabel(r.status) + '</span></div></div></div>';
 
     if (needsEdit) {
       // Candidates panel
@@ -758,10 +776,8 @@
       if (!fieldEdits[idx][f]) {
         const foundVal = (foundEntry[f] || "").toString();
         const origVal  = (entry[f]   || "").toString();
-        // Title: if the only difference is case/whitespace/LaTeX, keep original casing
-        const titleCaseOnly = f === "title" && origVal && foundVal &&
-          B.normalizeTitle(origVal) === B.normalizeTitle(foundVal);
-        const action = titleCaseOnly ? "original" : defaultAction;
+        const sameContent = B.fieldValuesEquivalent(f, origVal, foundVal);
+        const action = sameContent ? "original" : defaultAction;
         if (diffFieldSet.has(f)) {
           const d = r.field_diffs.find(x => x.field === f);
           fieldEdits[idx][f] = { action, value: action === "original" ? origVal : (foundVal || origVal) };
@@ -787,10 +803,8 @@
       const origVal  = (entry[f]      || "").toString();
       const foundVal = (foundEntry[f] || "").toString();
       const fe       = fieldEdits[idx][f] || { action: "original", value: origVal };
-      // For title: ignore differences that are purely case / whitespace / LaTeX accent variants
-      const titleCaseOnly = f === "title" && origVal && foundVal &&
-        B.normalizeTitle(origVal) === B.normalizeTitle(foundVal);
-      const hasDiff  = !titleCaseOnly && (diffFieldSet.has(f) || (origVal !== foundVal && (origVal || foundVal)));
+      const sameContent = B.fieldValuesEquivalent(f, origVal, foundVal);
+      const hasDiff  = !sameContent && (diffFieldSet.has(f) || (origVal !== foundVal && (origVal || foundVal)));
       const isNew    = !origVal && foundVal;   // enrichment: field only in found
 
       const tr = document.createElement("tr");

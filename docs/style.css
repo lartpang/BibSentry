@@ -743,6 +743,21 @@ code {
   transition: transform 0.15s, color 0.15s, border-color 0.15s;
 }
 
+.entry-list-position {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 4.4rem;
+  margin-top: 0.1rem;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .entry-card.expanded .entry-collapse-icon {
   transform: rotate(180deg);
   color: var(--accent);
